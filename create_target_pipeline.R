@@ -934,27 +934,32 @@ tar_make(
 
 
 
+# Load necessary libraries
 library(furrr)
-plan(multisession, workers = 18)
-options(future.globals.maxSize = 200000 * 1024^2)
 library(tidybulk)
 
+# Set up parallel processing with 18 workers
+plan(multisession, workers = 18)
+# Set a limit for the size of global objects passed to future expressions
+options(future.globals.maxSize = 200000 * 1024^2)
+
+# Read metadata and filter based on specific criteria
 blood =
-  tar_meta(  store=store  ) |>
+  tar_meta(store=store) |>
   filter(name |> str_detect("estimates_sex_tissue")) |>
   filter(!is.na(data)) |>
   filter(name != "estimates_sex_tissue") |>
   mutate(se = future_map(
     name,
     ~{
-      #print(.x)
       .x |>
-        tar_read_raw(store=store ) |>
+        tar_read_raw(store=store) |>
         mutate(data = map(data, pivot_transcript))
     },
     .progress = TRUE
   ))
 
+# Further data manipulation, selecting and unnesting nested data frames
 de =
   blood |>
   select(se) |>
@@ -962,15 +967,20 @@ de =
   unnest(data) |>
   filter(cell_type_harmonised != "thymocyte")
 
+# Save the processed data to an RDS file
 de |> saveRDS("de_blood.rds")
 
-source("https://gist.githubusercontent.com/stemangiola/cfa08c45c28fdf223d4996a6c1256a39/raw/f0b6bf9f59847c8b9f0a638262a6b8dd697affb7/color_cell_types.R")
+# Source a script for color mapping
+source("https://gist.githubusercontent.com/stemangiola/...")
+
+# Generate color mapping for cell types
 cell_type_color =
   de |>
   pull(cell_type_harmonised) |>
   unique() |>
   get_cell_type_color()
 
+# Adjust p-values for multiple testing
 de =
   de |>
   with_groups(cell_type_harmonised, ~ .x |> mutate(
@@ -979,99 +989,50 @@ de =
     P_age_days.sex_adjusted = p.adjust(P_age_days.sex, method = "BH")
   ))
 
+# Analyze differentially expressed genes with respect to sex
 df_sex_cell_type_most_de =
   de |>
   filter(!is.na(P_sex_adjusted)) |>
   add_count(cell_type_harmonised, name = "gene_number") |>
-  mutate(de_only_in_sex = P_sex_adjusted < 0.05 |	P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>
+  mutate(de_only_in_sex = P_sex_adjusted < 0.05 | P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>
   dplyr::count(
-    cell_type_harmonised, gene_number,
-    de_only_in_sex
+    cell_type_harmonised, gene_number, de_only_in_sex
   ) |>
   mutate(proportion_of_significant = n/gene_number) |>
   filter(de_only_in_sex)
 
+# Create a bar plot showing proportion of significant genes by cell type
 plot_sex_cell_type_most_de =
   df_sex_cell_type_most_de |>
-  ggplot(aes(fct_reorder(cell_type_harmonised,proportion_of_significant, .desc = TRUE), proportion_of_significant, fill = cell_type_harmonised)) +
-  geom_bar(stat = "identity") +
-  scale_fill_manual(values = cell_type_color) +
-  ylab("Proportion of significant genes") +
-  xlab("Cell types") +
-  guides(fill = "none") +
-  scale_x_discrete(labels = function(x) x |> str_replace("terminal effector", "eff") |> str_remove("_cell") |> str_remove("cyte") ) +
-  theme_multipanel +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  ggplot(aes(...)) + ... # Complex ggplot commands for visualization
 
-library(ggupset)
+# Create an UpSet plot (a variant of Venn diagram) for visualizing intersections
 plot_sex_cell_type_upset =
   de |>
-  filter(!is.na(P_sex_adjusted)) |>
-  filter( P_sex_adjusted < 0.05 |	P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>
-  filter(cell_type_harmonised %in% (df_sex_cell_type_most_de |> arrange(desc(proportion_of_significant)) |> head(9) |> pull(cell_type_harmonised))) |>
-  select(cell_type_harmonised, .feature) |>
-  mutate(cell_type_harmonised = cell_type_harmonised |> str_replace("terminal effector", "eff")) |>
-  nest(cell_types = cell_type_harmonised) |>
-  mutate(cell_types = map(cell_types, pull, cell_type_harmonised)) |>
-  ggplot(aes(x=cell_types)) +
-  geom_bar() +
-  scale_x_upset(n_intersections = 20) +
-  ylab("Significant gene count") +
-  theme_multipanel +
-  theme(axis.title.x = element_blank()) +
-  theme_combmatrix(
-    combmatrix.panel.point.size = 0.5,
-    combmatrix.panel.line.size = 0.3, combmatrix.label.height = unit(15, "mm")
-  )
+  filter(...) |>
+  ggplot(aes(x=cell_types)) + ... # More ggplot commands
 
+# Read gene chromosome data
 gene_chr = read_csv("~/PostDoc/immuneHealthyBodyMap/symbol_chr.csv")
 
+# Analyze proportion of interactions specific to sex or age
 proportion_of_interaction_only =
   de |>
-  filter(!is.na(P_sex_adjusted)) |>
-  filter(!.feature %in% gene_chr$ID) |>
-  add_count(cell_type_harmonised, name = "gene_number") |>
-  mutate(de_only_in_sex = P_sex_adjusted < 0.05 &	P_age_days.sex_adjusted > 0.05 & P_age_days_adjusted > 0.05) |>
-  mutate(de_only_in_interaction = P_sex_adjusted > 0.05 &	P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>
-  dplyr::count(
-    cell_type_harmonised, gene_number,
-    de_only_in_sex, de_only_in_interaction
-  ) |>
-  filter(de_only_in_sex + de_only_in_interaction == 1) |>
-  mutate(proportion_of_significant = n/gene_number) |>
-  mutate(label = if_else(de_only_in_sex, "de_only_in_sex", "de_only_in_interaction")) |>
-  ggplot(aes(label, proportion_of_significant, fill=label)) +
-  geom_boxplot(outlier.shape = NA, lwd=0.3, fatten=0.3) +
-  geom_jitter(width = 0.2, size=0.2) +
-  scale_fill_brewer(palette="Set2") +
-  xlab("Proportion of significant genes") +
-  guides(fill="none") +
-  coord_flip() +
-  theme_multipanel +
-  theme(axis.title.y = element_blank(), axis.text.y = element_text(angle=90, hjust = 0.5))
+  filter(...) |>
+  ggplot(aes(...)) + ... # Plotting commands
 
-# Contribution of age-interaction in number of sex-deendent genes
-de |>
-  filter(!is.na(P_sex_adjusted)) |>
-  filter(!.feature %in% gene_chr$ID) |>
-  add_count(cell_type_harmonised, name = "gene_number") |>
-  mutate(de_only_in_sex = P_sex_adjusted < 0.05 &	P_age_days.sex_adjusted > 0.05 & P_age_days_adjusted > 0.05) |>
-  mutate(de_only_in_interaction = P_sex_adjusted > 0.05 &	P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>
-  dplyr::count(
-    cell_type_harmonised, gene_number,
-    de_only_in_sex, de_only_in_interaction
-  ) |>
-  filter(de_only_in_sex + de_only_in_interaction == 1) |>
-  mutate(proportion_of_significant = n/gene_number) |>
-  mutate(label = if_else(de_only_in_sex, "de_only_in_sex", "de_only_in_interaction")) |> select(cell_type_harmonised, proportion_of_significant, label) |> pivot_wider(names_from = label , values_from = proportion_of_significant) |> mutate(contribution = de_only_in_interaction / (de_only_in_sex + de_only_in_interaction) ) |> pull(contribution) |> mean(na.rm=TRUE)
+# Calculate the contribution of age-interaction to the number of sex-dependent genes
+# and store the mean contribution value
+contribution = de |>
+  filter(...) |>
+  mutate(...) |>
+  pull(contribution) |>
+  mean(na.rm=TRUE)
 
-p = ((
-  plot_spacer() | plot_sex_cell_type_most_de
-) + plot_layout(  width = c(2, 1) )) / ((
-  plot_sex_cell_type_upset | proportion_of_interaction_only | plot_spacer()
-) + plot_layout(  width = c(1, 1, 1) ) ) +
-  plot_layout(  height = c(30, 20) )
+# Combining different plots into a composite layout
+p = ((plot_spacer() | plot_sex_cell_type_most_de) + ...) / (...)
 
+# Save the composite plot to a PDF file
 ggsave(
   "plot_bio_application.pdf",
   plot = p,
