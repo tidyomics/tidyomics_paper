@@ -896,53 +896,53 @@ tar_make(
 
 
 
-# Load necessary libraries
-library(furrr)
-library(tidybulk)
+# Loading required libraries
+library(furrr)  # For parallel processing
+library(tidybulk)  # For bulk RNA-seq data analysis
 
-# Set up parallel processing with 18 workers
+# Setting up parallel processing plan with 18 workers
 plan(multisession, workers = 18)
-# Set a limit for the size of global objects passed to future expressions
+# Setting the maximum size for global objects passed to future expressions
 options(future.globals.maxSize = 200000 * 1024^2)
 
-# Read metadata and filter based on specific criteria
+# Retrieving and preprocessing blood data
 blood =
-  tar_meta(store=store) |>
-  filter(name |> str_detect("estimates_sex_tissue")) |>
-  filter(!is.na(data)) |>
-  filter(name != "estimates_sex_tissue") |>
+  tar_meta(  store=store  ) |>  # Accessing metadata from a target store
+  filter(name |> str_detect("estimates_sex_tissue")) |>  # Filtering for specific dataset names
+  filter(!is.na(data)) |>  # Removing entries with NA data
+  filter(name != "estimates_sex_tissue") |>  # Excluding a specific dataset
   mutate(se = future_map(
     name,
-    ~{
+    ~{  # Applying function to each element in 'name'
+      #print(.x)  # Uncomment to print the current name
       .x |>
-        tar_read_raw(store=store) |>
-        mutate(data = map(data, pivot_transcript))
+        tar_read_raw(store=store ) |>  # Reading raw data from target store
+        mutate(data = map(data, pivot_transcript))  # Pivoting transcript data
     },
-    .progress = TRUE
+    .progress = TRUE  # Showing progress
   ))
 
-# Further data manipulation, selecting and unnesting nested data frames
+# Preparing data for differential expression analysis
 de =
   blood |>
-  select(se) |>
-  unnest(se) |>
-  unnest(data) |>
-  filter(cell_type_harmonised != "thymocyte")
+  select(se) |>  # Selecting the 'se' column
+  unnest(se) |>  # Expanding list columns
+  unnest(data) |>  # Further expanding nested data
+  filter(cell_type_harmonised != "thymocyte")  # Filtering out specific cell types
 
-# Save the processed data to an RDS file
+# Saving the prepared data to an RDS file
 de |> saveRDS("de_blood.rds")
 
-# Source a script for color mapping
-source("https://gist.githubusercontent.com/stemangiola/...")
-
-# Generate color mapping for cell types
+# Sourcing a script for cell type color mapping
+source("https://gist.githubusercontent.com/stemangiola/cfa08c45c28fdf223d4996a6c1256a39/raw/f0b6bf9f59847c8b9f0a638262a6b8dd697affb7/color_cell_types.R")
+# Getting colors for cell types
 cell_type_color =
   de |>
-  pull(cell_type_harmonised) |>
-  unique() |>
-  get_cell_type_color()
+  pull(cell_type_harmonised) |>  # Extracting cell type column
+  unique() |>  # Getting unique cell types
+  get_cell_type_color()  # Applying function to get colors
 
-# Adjust p-values for multiple testing
+# Adjusting p-values for multiple testing
 de =
   de |>
   with_groups(cell_type_harmonised, ~ .x |> mutate(
@@ -951,55 +951,93 @@ de =
     P_age_days.sex_adjusted = p.adjust(P_age_days.sex, method = "BH")
   ))
 
-# Analyze differentially expressed genes with respect to sex
+# Determining the most differentially expressed genes by sex in each cell type
 df_sex_cell_type_most_de =
   de |>
-  filter(!is.na(P_sex_adjusted)) |>
-  add_count(cell_type_harmonised, name = "gene_number") |>
-  mutate(de_only_in_sex = P_sex_adjusted < 0.05 | P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>
+  filter(!is.na(P_sex_adjusted)) |>  # Filtering out NA adjusted p-values
+  add_count(cell_type_harmonised, name = "gene_number") |>  # Counting genes per cell type
+  mutate(de_only_in_sex = P_sex_adjusted < 0.05 | P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>  # Determining differential expression by sex
   dplyr::count(
-    cell_type_harmonised, gene_number, de_only_in_sex
-  ) |>
-  mutate(proportion_of_significant = n/gene_number) |>
-  filter(de_only_in_sex)
+    cell_type_harmonised, gene_number,
+    de_only_in_sex
+  ) |>  # Counting differential expressions
+  mutate(proportion_of_significant = n/gene_number) |>  # Calculating proportion of significant genes
+  filter(de_only_in_sex)  # Filtering for differential expression by sex only
 
-# Create a bar plot showing proportion of significant genes by cell type
+# Creating a bar plot for the proportion of significant genes by cell type
 plot_sex_cell_type_most_de =
   df_sex_cell_type_most_de |>
-  ggplot(aes(...)) + ... # Complex ggplot commands for visualization
+  ggplot(aes(fct_reorder(cell_type_harmonised,proportion_of_significant, .desc = TRUE), proportion_of_significant, fill = cell_type_harmonised)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = cell_type_color) +
+  ylab("Proportion of significant genes") +
+  xlab("Cell types") +
+  guides(fill = "none") +
+  scale_x_discrete(labels = function(x) x |> str_replace("terminal effector", "eff") |> str_remove("_cell") |> str_remove("cyte") ) +
+  theme_multipanel +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
-# Create an UpSet plot (a variant of Venn diagram) for visualizing intersections
+# Loading ggupset for creating UpSet plots
+library(ggupset)
+# Creating an UpSet plot to visualize intersections of cell types and features
 plot_sex_cell_type_upset =
   de |>
-  filter(...) |>
-  ggplot(aes(x=cell_types)) + ... # More ggplot commands
+  filter(!is.na(P_sex_adjusted)) |>  # Filtering out NA adjusted p-values
+  filter( P_sex_adjusted < 0.05 | P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>  # Filtering for significant genes
+  filter(cell_type_harmonised %in% (df_sex_cell_type_most_de |> arrange(desc(proportion_of_significant)) |> head(9) |> pull(cell_type_harmonised))) |>  # Filtering top cell types
+  select(cell_type_harmonised, .feature) |>  # Selecting relevant columns
+  mutate(cell_type_harmonised = cell_type_harmonised |> str_replace("terminal effector", "eff")) |>  # Modifying cell type names
+  nest(cell_types = cell_type_harmonised) |>  # Nesting data by cell types
+  mutate(cell_types = map(cell_types, pull, cell_type_harmonised)) |>  # Transforming nested data
+  ggplot(aes(x=cell_types)) +
+  geom_bar() +
+  scale_x_upset(n_intersections = 20) +
+  ylab("Significant gene count") +
+  theme_multipanel +
+  theme(axis.title.x = element_blank()) +
+  theme_combmatrix(
+    combmatrix.panel.point.size = 0.5,
+    combmatrix.panel.line.size = 0.3, combmatrix.label.height = unit(15, "mm")
+  )
 
-# Read gene chromosome data
+# Reading chromosome data for genes
 gene_chr = read_csv("~/PostDoc/immuneHealthyBodyMap/symbol_chr.csv")
 
-# Analyze proportion of interactions specific to sex or age
+# Calculating the proportion of interaction-only significant genes
 proportion_of_interaction_only =
   de |>
-  filter(...) |>
-  ggplot(aes(...)) + ... # Plotting commands
+  filter(!is.na(P_sex_adjusted)) |>  # Filtering out NA adjusted p-values
+  filter(!.feature %in% gene_chr$ID) |>  # Excluding genes listed in gene_chr
+  add_count(cell_type_harmonised, name = "gene_number") |>  # Counting genes per cell type
+  mutate(de_only_in_sex = P_sex_adjusted < 0.05 & P_age_days.sex_adjusted > 0.05 & P_age_days_adjusted > 0.05) |>  # Defining differential expression by sex
+  mutate(de_only_in_interaction = P_sex_adjusted > 0.05 & P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>  # Defining differential expression by interaction
+  dplyr::count(
+    cell_type_harmonised, gene_number,
+    de_only_in_sex, de_only_in_interaction
+  ) |>  # Counting differential expressions
+  filter(de_only_in_sex + de_only_in_interaction == 1) |>  # Filtering for exclusive categories
+  mutate(proportion_of_significant = n/gene_number) |>  # Calculating proportion of significant genes
+  mutate(label = if_else(de_only_in_sex, "de_only_in_sex", "de_only_in_interaction")) |>  # Labeling categories
+  ggplot(aes(label, proportion_of_significant, fill=label)) +
+  geom_boxplot(outlier.shape = NA, lwd=0.3, fatten=0.3) +
+  geom_jitter(width = 0.2, size=0.2) +
+  scale_fill_brewer(palette="Set2") +
+  xlab("Proportion of significant genes") +
+  guides(fill="none") +
+  coord_flip() +
+  theme_multipanel +
+  theme(axis.title.y = element_blank(), axis.text.y = element_text(angle=90, hjust = 0.5))
 
-# Calculate the contribution of age-interaction to the number of sex-dependent genes
-# and store the mean contribution value
-contribution = de |>
-  filter(...) |>
-  mutate(...) |>
-  pull(contribution) |>
-  mean(na.rm=TRUE)
+# Calculating the contribution of age-interaction in the number of sex-dependent genes
+contribution_of_age_interaction =
+  de |>
+  filter(!is.na(P_sex_adjusted)) |>  # Filtering out NA adjusted p-values
+  filter(!.feature %in% gene_chr$ID) |>  # Excluding genes listed in gene_chr
+  add_count(cell_type_harmonised, name = "gene_number") |>  # Counting genes per cell type
+  mutate(de_only_in_sex = P_sex_adjusted < 0.05 & P_age_days.sex_adjusted > 0.05 & P_age_days_adjusted > 0.05) |>  # Defining differential expression by sex
+  mutate(de_only_in_interaction = P_sex_adjusted > 0.05 & P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>  # Defining differential expression by interaction
+  dplyr::count(
+    cell_type_harmonised, gene_number,
+    de_only_in_sex, de_only_in_interaction
+  ) |>  # Counting differential expressions
 
-# Combining different plots into a composite layout
-p = ((plot_spacer() | plot_sex_cell_type_most_de) + ...) / (...)
-
-# Save the composite plot to a PDF file
-ggsave(
-  "plot_bio_application.pdf",
-  plot = p,
-  units = c("mm"),
-  width = 70 *2,
-  height = 55 *2 ,
-  limitsize = FALSE
-)
