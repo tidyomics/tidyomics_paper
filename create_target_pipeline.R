@@ -5,22 +5,24 @@ library(tictoc)
 source("https://gist.githubusercontent.com/stemangiola/fc67b08101df7d550683a5100106561c/raw/a0853a1a4e8a46baf33bad6268b09001d49faf51/ggplot_theme_multipanel")
 library(patchwork)
 # # Get input from other workflow
-# result_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc/immuneHealthyBodyMap/pseudobulk_0.2.3.5_non_immune"
-# root_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc/immuneHealthyBodyMap"
-# store=glue("{result_directory}/_targets__pseudobulk_non_immune_split3")
-#
-# pseudobulk_df_tissue = tar_read(pseudobulk_df_tissue, store=store)
-# pseudobulk_df_tissue = pseudobulk_df_tissue |> filter(tissue_harmonised == "blood")
-# pseudobulk_df_tissue = pseudobulk_df_tissue |> group_by(cell_type_harmonised) |> tar_group()
-# pseudobulk_df_tissue |> qs::qsave("pseudobulk_df_tissue_blood.qs")
+result_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc/immuneHealthyBodyMap/pseudobulk_0.2.3.5_non_immune"
+root_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc/immuneHealthyBodyMap"
+store=glue("{result_directory}/_targets__pseudobulk_non_immune_split3")
 
-result_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc/tidyomics"
-store=glue("{result_directory}/_targets_tidyomics")
+pseudobulk_df_tissue = tar_read(pseudobulk_df_tissue, store=store)
+pseudobulk_df_tissue = pseudobulk_df_tissue |> filter(tissue_harmonised == "blood")
+pseudobulk_df_tissue = pseudobulk_df_tissue |> group_by(cell_type_harmonised) |> tar_group()
+pseudobulk_df_tissue |> qs::qsave("pseudobulk_df_tissue_blood.qs")
+
+root_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc"
+
+
+store=glue("_targets_tidyomics")
 
 
 tar_script({
 
-  result_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc/tidyomics"
+  result_directory = "./"
 
   #-----------------------#
   # Input
@@ -44,9 +46,7 @@ tar_script({
       slurm_cpus_per_task = 2,
       workers = 200,
       verbose = T
-      #,
-      #script_lines = "module load R/4.2.1",
-      #host = "spartan.hpc.unimelb.edu.au"
+
     )
 
   small_slurm_memory =
@@ -56,9 +56,7 @@ tar_script({
       slurm_cpus_per_task = 1,
       workers = 10,
       verbose = T
-      #,
-      #script_lines = "module load R/4.2.1",
-      #host = "spartan.hpc.unimelb.edu.au"
+
     )
 
   slurm_3 =
@@ -68,9 +66,7 @@ tar_script({
       slurm_cpus_per_task = 3,
       workers = 400,
       verbose = T
-      #,
-      #script_lines = "module load R/4.2.1",
-      #host = "spartan.hpc.unimelb.edu.au"
+
     )
 
   big_slurm =
@@ -80,9 +76,7 @@ tar_script({
       slurm_cpus_per_task = 5,
       workers = 300,
       verbose = T
-      #,
-      #script_lines = "module load R/4.2.1",
-      #host = "spartan.hpc.unimelb.edu.au"
+
     )
 
   #-----------------------#
@@ -874,18 +868,7 @@ tar_script({
       memory = "persistent"
     ) ,
 
-    # tar_target(
-    #   sce_df_split_by_gene_grouped_list,
-    #   sce_df_split_by_gene_grouped |> list(),
-    #   pattern = map(sce_df_split_by_gene_grouped),
-    #   iteration = "list",
-    #   deployment = "main",
-    #   memory = "persistent",
-    #   storage = "main",
-    #   retrieval = "main",
-    # ) ,
-    #
-    #
+
     # Analyse
     tar_target(
       estimates_sex_tissue,
