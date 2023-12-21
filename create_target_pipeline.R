@@ -108,10 +108,14 @@ tar_script({
     # cue = tar_cue(mode = "never") # Force skip non-debugging outdated targets.
   )
 
+  # Define a function to process and split metadata
   split_metadata = function(metadata_DB_path){
+    # Read metadata from an RDS file and add a column for age in days
     metadata = readRDS(metadata_DB_path) |> mutate(age_days = age_days_original)
 
+    # Start processing the metadata
     get_metadata() |>
+      # Filter samples based on a condition
       filter(
         sample_ %in% (
           !!metadata |>
@@ -120,7 +124,7 @@ tar_script({
             pull(sample_)
         )) |>
 
-      # Attach lineage
+      # Join with additional metadata about cell types
       left_join(
         read_csv("~/PostDoc/immuneHealthyBodyMap/metadata_cell_type.csv") |>
           replace_na(list(lineage_1 = "other_non_immune")) |>
@@ -128,18 +132,21 @@ tar_script({
         by = join_by(cell_type),
         copy = TRUE
       ) |>
-      #filter(is_immune == "FALSE" & !is.na(lineage_1)) |>
+
+      # Filter and format the dataset
       filter(!is.na(lineage_1)) |>
       filter(!cell_type_harmonised %in% c("platelet", "immune_unclassified")) |>
       as_tibble() |>
 
-      # Filter rare cell types
+      # Filter out rare cell types (less than 100 occurrences)
       add_count(cell_type_harmonised, name = "count_cell_type_harmonised") |>
-      filter(count_cell_type_harmonised>100) |>
+      filter(count_cell_type_harmonised > 100) |>
       select(-count_cell_type_harmonised) |>
 
-      # Format covatriates
+      # Format the assay field by replacing spaces and dashes
       mutate(assay = assay |> str_replace_all(" ", "_") |> str_replace_all("-", "_")  |> str_remove_all("'")) |>
+
+      # Simplify ethnicity information
       mutate(
         ethnicity = case_when(
           ethnicity |> str_detect("Chinese|Asian") ~ "Chinese",
@@ -148,11 +155,10 @@ tar_script({
         )
       ) |>
 
-      # Mutate days
-      filter(development_stage!="unknown") |>
+      # Filter out unknown developmental stages
+      filter(development_stage != "unknown") |>
 
-      # Establish the baseline for simplified ethnicity. European as it is the most represented
-      # This is so I have a tight intercept term for data simulation
+      # Simplify ethnicity categorization
       mutate(ethnicity_simplified = case_when(
         ethnicity %in% c("European", "Chinese", "African", "Hispanic or Latin American") ~ ethnicity,
         TRUE ~ "Other"
@@ -160,26 +166,24 @@ tar_script({
       mutate(
         ethnicity_simplified =
           ethnicity_simplified |>
-          fct_relevel(c("European", "Chinese", "African", "Hispanic or Latin American", "Other")
-          )) |>
+          fct_relevel(c("European", "Chinese", "African", "Hispanic or Latin American", "Other"))
+      ) |>
 
-      # Establish the baseline for simplified assay
-      # Summarise assays to get more stable data simulations
-      # 10x as baseline
+      # Simplify assay information
       mutate(assay_simplified = if_else(assay |> str_detect("10x"), "10x", assay)) |>
       mutate(assay_simplified = factor(assay_simplified)) |>
 
-      # Establish the baseline for disease
+      # Set a baseline for disease status
       mutate(disease = if_else(disease == "normal", "aaa_normal", disease)) |>
 
-      # Select few columns to make things lighter
+      # Select specific columns for further analysis
       select(
         cell_, cell_type_harmonised, sample_,  file_id, file_id_db,
         age_days, development_stage, sex, tissue_harmonised, disease,
         ethnicity_simplified, assay_simplified, is_immune
       ) |>
 
-      # Cell type for non immune are not summarised ernought I'm loosing a lot of samples
+      # Filter out certain cell types and further categorize cell types
       filter(cell_type_harmonised != "animal_cell") |>
       mutate(cell_type_harmonised = case_when(
         cell_type_harmonised |> str_detect("fibro") ~ "stromal_cell",
@@ -196,39 +200,40 @@ tar_script({
         TRUE ~ cell_type_harmonised
       )) |>
 
-      # Split very big datasets with a lot of samples, with maximum 100 samples
+      # Split datasets with many samples into chunks of maximum 100 samples
       nest(data = -c(cell_type_harmonised, tissue_harmonised, file_id, is_immune, sample_)) |>
       with_groups(
         c(cell_type_harmonised, tissue_harmonised, file_id, is_immune),
         ~ .x |>
           arrange(file_id) |>
           mutate(sample_chunk = row_number() |>
-
-                   # MAX SAMPLES
                    divide_by(100) |>
                    ceiling()
           )
       ) |>
       unnest(data) |>
 
-      # group
+      # Nest the data again for final group-wise processing
       nest(data = -c(cell_type_harmonised, tissue_harmonised, file_id, is_immune, sample_chunk))
 
   }
 
-  get_sce = 	function(tissue_cell_type_metadata) {
+  # Define a function 'get_sce' that takes metadata as input
+  get_sce = function(tissue_cell_type_metadata) {
 
+    # Process each item in the metadata
     tissue_cell_type_metadata |>
       mutate(data = pmap(
+        # Map over data, cell_type_harmonised, and tissue_harmonised columns
         list(data, cell_type_harmonised, tissue_harmonised),
-        ~ ..1 |>
+        ~ ..1 |> # Unpack the first argument (data)
+          # Fetch single cell experiment data from a cache directory
           get_single_cell_experiment(cache_directory = "/vast/projects/cellxgene_curated") |>
+          # Mutate to create a unique identifier for each sample
           mutate(sample_se =
-
-                   # I need to fix Curated CellAtlas with disease sample, duplication for
-                   # file_id=="cc3ff54f-7587-49ea-b197-1515b6d98c4c", cell_type_harmonised=="stromal_cell"
-                   # for lung
+                   # Use the glue function to combine sample, disease, cell type, and tissue into a unique ID
                    glue("{sample_}___{disease}___{..2}___{..3}") |>
+                   # Replace spaces and slashes in the ID for standardization
                    str_replace_all(" ", "_") |>
                    str_replace_all("/", "__")
           )
@@ -236,167 +241,184 @@ tar_script({
 
   }
 
-  get_pseudobulk = 	function(sce_df) {
+  # Define a function 'get_pseudobulk' that takes a data frame 'sce_df' as input
+  get_pseudobulk = function(sce_df) {
 
+    # Process the input data frame
     sce_df |>
+      # Use 'mutate' to apply a function to each element of the 'data' column
       mutate(data = map(
         data,
-        ~ .x |>
-          tidySingleCellExperiment::aggregate_cells( .sample = sample_se	)
+        # For each element in 'data', apply a function
+        ~ .x |> # '.x' refers to the current element of 'data'
+          # Aggregate single-cell data into pseudobulk data
+          # The function 'aggregate_cells' is from the tidySingleCellExperiment package
+          # It aggregates data based on the 'sample_se' column which is a sample identifier
+          tidySingleCellExperiment::aggregate_cells(.sample = sample_se)
       ))
 
   }
 
+  # In this function, the relationship between two specified columns (.col1 and .col2) in a dataset is analyzed to detect a potential confounder. The function nests the data based on each column in turn and calculates the number of unique values in the other column for each group. This can help in understanding how these two variables are related and whether they might confound each other in a statistical analysis. For example, if .col1 represents "ethnicity" and .col2 represents "assay type", this function would help determine how many unique assay types there are for each ethnicity and vice versa.
+  # Define a function 'nest_detect_complete_confounder' that takes a dataset and two column names as input
   nest_detect_complete_confounder = function(.data, .col1, .col2){
-
+    # Capture the column names as quosures (to allow for non-standard evaluation)
     .col1 = enquo(.col1)
     .col2 = enquo(.col2)
 
+    # Begin processing the input data
     .data |>
-
+      # Nest data except for the two specified columns
       nest(se_data = -c(!!.col1, !!.col2)) |>
 
-      # How many ethnicity per assay
+      # Analyze the first column against the second
+      # First, nest the data except for the first column
       nest(data = -!!.col1) |>
+      # Count the unique values in the second column for each group of the first column
       mutate(n1 = map_int(data, ~ .x |> distinct(!!.col2) |> nrow())) |>
+      # Unnest the data to revert to the original format
       unnest(data) |>
 
-      # How many assay per ethnicity
-      nest(data = - !!.col2) |>
+      # Analyze the second column against the first
+      # Nest the data except for the second column
+      nest(data = -!!.col2) |>
+      # Count the unique values in the first column for each group of the second column
       mutate(n2 = map_int(data, ~ .x |> distinct(!!.col1) |> nrow())) |>
+      # Unnest the data to revert to the original format
       unnest(data)
   }
 
+  # This function processes a dataset by first determining the number of unique values in .col2 for each unique value in .col1 and vice versa. Then, it joins this information back to the original dataset. This approach can be useful for understanding the interaction between two variables and checking if one variable is a complete confounder of the other. For instance, in a dataset where .col1 is "ethnicity" and .col2 is "assay type", this function helps to assess how many assay types are used per ethnicity and how many ethnicities are involved per assay type, which could influence the analysis results.
+  # Define a function 'left_join_detect_complete_confounder' that takes a dataset and two column names as input
   left_join_detect_complete_confounder = function(.data, .col1, .col2){
-
+    # Capture the column names as quosures (to allow for non-standard evaluation)
     .col1 = enquo(.col1)
     .col2 = enquo(.col2)
 
+    # Calculate counts for the unique values in the two columns
     counts =
       .data |>
+      # Select distinct pairs of values from the two columns
+      distinct(!!.col1, !!.col2) |> # Quicker than nesting
 
-
-      # nest(se_data = -c(!!.col1, !!.col2)) |>
-      distinct(!!.col1, !!.col2) |> # Quicker
-
-      # How many ethnicity per assay
+      # Nest data except for the first column
       nest(data = -!!.col1) |>
+      # Count the unique values in the second column for each group of the first column
       mutate(n1 = map_int(data, ~ .x |> distinct(!!.col2) |> nrow())) |>
+      # Unnest the data
       unnest(data) |>
 
-      # How many assay per ethnicity
-      nest(data = - !!.col2) |>
+      # Nest data except for the second column
+      nest(data = -!!.col2) |>
+      # Count the unique values in the first column for each group of the second column
       mutate(n2 = map_int(data, ~ .x |> distinct(!!.col1) |> nrow())) |>
+      # Unnest the data
       unnest(data)
 
+    # Join the original dataset with the calculated counts
     .data |>
-      left_join(counts) #, by = join_by(!!.col1, !!.col2))
+      left_join(counts) # Join on the two specified columns
   }
 
+  # In this function, the left_join_detect_complete_confounder function is used to join the original data with counts of unique values in the two specified columns (.col1 and .col2). It then filters out rows where the sum of these counts (n1 + n2) is not greater than 2. This filtering step aims to remove data points that could be complete confounders, thus potentially improving the quality and reliability of subsequent analyses. The function finally removes the count columns from the dataset, leaving only the relevant data for analysis.
+  # Define a function 'drop_samples_complete_confounder' that takes a dataset and two column names as input
   drop_samples_complete_confounder = function(.data, .col1, .col2){
-
+    # Capture the column names as quosures (to allow for non-standard evaluation)
     .col1 = enquo(.col1)
     .col2 = enquo(.col2)
 
+    # Process the input dataset
     .data |>
+      # Join the dataset with counts of unique values for the two specified columns
+      # This function is defined to detect complete confounders
       left_join_detect_complete_confounder(!!.col1, !!.col2) |>
+      # Filter out rows where the sum of unique counts for both columns is not greater than 2
+      # This step aims to remove rows where there might be complete confounding
       filter(n1 + n2 > 2) |>
+      # Remove the count columns (n1 and n2) from the dataset
       select(-n1, -n2)
-
   }
 
+  # Define a function to process a dataset 'se' (likely a SingleCellExperiment object)
   samples_NOT_complete_confounders_for_ethnicity_assay = function(se){
-
-
-
+    # Process the dataset
     se =
       se |>
-      # distinct(assay_simplified, ethnicity_simplified, .sample) |>
-      #
+      # Nest data except for assay and ethnicity
       nest(se_data = -c(assay_simplified, ethnicity_simplified)) |>
 
-      # How many ethnicity per assay
+      # Count distinct ethnicities for each assay type
       nest(data = -assay_simplified) |>
       mutate(n1 = map_int(data, ~ .x |> distinct(ethnicity_simplified) |> nrow())) |>
       unnest(data) |>
 
-      # How many assay per ethnicity
-      nest(data = - ethnicity_simplified) |>
+      # Count distinct assays for each ethnicity
+      nest(data = -ethnicity_simplified) |>
       mutate(n2 = map_int(data, ~ .x |> distinct(assay_simplified) |> nrow())) |>
       unnest(data)
 
-    # Replace ethnicity
+    # Select an assay as a dummy value based on the highest sum of n1 and n2
     dummy_assay = se |> arrange(desc(n1 + n2)) |> slice(1) |> pull(assay_simplified)
 
+    # Replace assay type in cases with less than 3 distinct values in either ethnicity or assay
     se |>
-      mutate(assay_simplified = if_else(n1 + n2 < 3, dummy_assay, assay_simplified)) 	|>
-
-      # # Filter
-      # filter(!(n1==1 & n2==1)) |>
+      mutate(assay_simplified = if_else(n1 + n2 < 3, dummy_assay, assay_simplified)) |>
+      # Clean up the dataset by removing n1 and n2 columns
       select(-n1, -n2) |>
-
+      # Unnest the summarized experiment data
       unnest_summarized_experiment(se_data)
-    # |>
-    # 	pull(.sample) |>
-    # 	unique()
   }
 
+  # Define a function to process a dataset 'se' considering ethnicity and disease
   samples_NOT_complete_confounders_for_ethnicity_disease = function(se){
-
-
-
+    # Process the dataset
     se =
       se |>
-      #distinct(disease, ethnicity_simplified, .sample) |>
-
+      # Nest data except for disease and ethnicity
       nest(se_data = -c(disease, ethnicity_simplified)) |>
 
-      # How many ethnicity per assay
+      # Count distinct ethnicities for each disease
       nest(data = -disease) |>
       mutate(n1 = map_int(data, ~ .x |> distinct(ethnicity_simplified) |> nrow())) |>
       unnest(data) |>
 
-      # How many assay per ethnicity
-      nest(data = - ethnicity_simplified) |>
+      # Count distinct diseases for each ethnicity
+      nest(data = -ethnicity_simplified) |>
       mutate(n2 = map_int(data, ~ .x |> distinct(disease) |> nrow())) |>
       unnest(data)
 
-
-    # Replace ethnicity
+    # Select an ethnicity as a dummy value based on the highest sum of n1 and n2
     dummy_ethnicity = se |> arrange(desc(n1 + n2)) |> slice(1) |> pull(ethnicity_simplified)
 
+    # Replace ethnicity in cases with less than 3 distinct values in either ethnicity or disease
     se |>
-      mutate(ethnicity_simplified = if_else(n1 + n2 < 3, dummy_ethnicity, ethnicity_simplified)) 	|>
-
-      # # Filter
-      # filter(!(n1==1 & n2==1)) |>
+      mutate(ethnicity_simplified = if_else(n1 + n2 < 3, dummy_ethnicity, ethnicity_simplified)) |>
+      # Clean up the dataset by removing n1 and n2 columns
       select(-n1, -n2) |>
-
+      # Unnest the summarized experiment data
       unnest_summarized_experiment(se_data)
-    # |>
-    # 	pull(.sample) |>
-    # 	unique()
   }
 
+  # Define a function 'aggregate' for processing and aggregating single-cell experiment data
   aggregate = function(se_df){
-
+    # Print a message indicating the start of the aggregation process
     print("Start aggregate")
+    # Perform garbage collection to free up memory
     gc()
 
+    # Process the input data frame
     se_df |>
-
-      # Add columns and filter
+      # Mutate to apply a function to each element of the 'data' column
       mutate(data = pmap(
         list(data, cell_type_harmonised, tissue_harmonised, file_id),
         ~ {
-          # Add columns
+          # Add relevant columns to the SingleCellExperiment object
           se =
             ..1 |>
             mutate(cell_type_harmonised = ..2, tissue_harmonised = ..3, file_id = ..4) |>
             select(-any_of(c("file_id_db", ".cell", "original_cell_id")))
 
-
-          # Identify samples with many genes
+          # Identify samples with a high number of genes (more than 5000)
           sample_with_many_genes =
             se |>
             assay("counts") |>
@@ -405,76 +427,82 @@ tar_script({
             mutate(value = as.character(value), name = as.character(name)) |>
             filter(value > 5000) |>
             pull(name)
+          # Filter the dataset to keep only samples with many genes
           se = se[,sample_with_many_genes, drop=FALSE]
 
-          # Filter samples with too few cells
+          # Further filter the dataset to keep samples with more than 10 cells
           se = se |> filter(.aggregated_cells > 10)
-
         },
         .progress=TRUE
       )) |>
 
-      # nest for output
+      # Nest the data for output preparation
       nest(data = -c(tissue_harmonised, cell_type_harmonised)) |>
 
-      # bind
+      # Bind the nested data
       mutate(data = map(
         data,
         ~ {
+          # Combine data from different SingleCellExperiment objects
+          se = do.call(cbind, .x |> pull(data))
 
-          se = do.call(cbind,  .x |> pull(data))
-
-          # Filter very rare gene-transcripts
+          # Filter out genes that are very rare (all zero counts or total counts less than 15)
           all_zeros = assay(se, "counts") |> rowSums() |> equals(0)
           se = se[!all_zeros,]
           lower_than_total_counts = assay(se, "counts") |> rowSums() < 15
           se = se[!lower_than_total_counts,]
 
-          # Make it sparse
+          # Convert the counts matrix to a sparse matrix to optimize memory usage
           se@assays@data$counts = as(se@assays@data$counts, "sparseMatrix")
 
+          # Return the processed SingleCellExperiment object
           se
         }
       ))
 
-
   }
 
+  # Define a function 'map_quantile_scale_abundance' for scaling and normalizing abundance in single-cell experiment data
   map_quantile_scale_abundance = function(se_df){
-
+    # Print a message indicating the start of the scaling process
     print("Start scale abundance")
+    # Perform garbage collection to free up memory
     gc()
 
+    # Process the input data frame
     se_df |>
+      # Apply quantile normalization to each element of the 'data' column
+      mutate(data = map(data, quantile_normalise_abundance, method = "preprocesscore_normalize_quantiles_use_target")) |>
 
-      # Quantile tranformation
-      mutate(data = map(data,	quantile_normalise_abundance, method = "preprocesscore_normalize_quantiles_use_target")) |>
-
-      # convert to sparse again
+      # Convert the scaled counts to a sparse matrix format
       mutate(data = map(data, ~ {
-
+        # Convert the 'counts_scaled' matrix to a sparse matrix
         .x@assays@data$counts_scaled = as(.x@assays@data$counts_scaled, "sparseMatrix")
 
+        # Clean up the environment attribute to avoid memory leaks
         attr(.x, "internals")$tt_columns$.abundance_scaled |> attr(".Environment") = NULL # new_environment()
 
+        # Return the processed SingleCellExperiment object
         .x
       }))
-
   }
 
+  # Define a function 'map_keep_abundant' for filtering abundant genes in single-cell experiment data
   map_keep_abundant = function(se_df){
-
+    # Print a message indicating the start of the process
     print("Start keep abundant")
+    # Perform garbage collection to free up memory
     gc()
 
-
+    # Process the input data frame
     se_df |>
       mutate(data = map(
         data,
         ~ {
-
-          # For blood
+          # Check if the number of columns (samples) is greater than 1000
+          # This is likely a check for a specific type of data or condition, like blood
           if(ncol(.x) > 1000)
+            # For datasets with many samples, apply a specific filtering function
             .x |>
             keep_abundant(
               .abundance = counts_scaled,
@@ -484,51 +512,27 @@ tar_script({
             )
 
           else {
-            # Select abundant genes within tissues and unite
+            # For datasets with fewer samples, apply a different strategy
 
-            # DEDUPLLICATE
-            # I have to investigate e80ca11e47c3f5db861058eabac363c5___aaa_normal___hematopoietic_cell___blood
-            .x = .x[,!colnames(.x) |> duplicated()]
+            # Remove duplicate columns
+            .x = .x[, !colnames(.x) |> duplicated()]
 
+            # Determine the abundant genes based on nested conditions
             abundant_genes =
               .x |>
               nest(data = -cell_type_harmonised) |>
-
-              # Filter if only one sex
               mutate(abundant_genes = map(
                 data,
                 ~ {
-
+                  # Apply the keep_abundant function to each nested dataset
                   se = .x
-
-                  # # Avoid indeterminability
-                  # if(ncol(se) > 0) {
-                  #
-                  # 	ethnicity_to_keep = se |> pivot_sample() |> count(ethnicity_simplified) |> filter(n >1) |> pull(ethnicity_simplified)
-                  # 	se = se |> filter(ethnicity_simplified %in% ethnicity_to_keep)
-                  #
-                  # 	sex_to_keep = se |> pivot_sample() |> count(sex) |> filter(n >1) |> pull(sex)
-                  # 	se = se |> filter(sex %in% sex_to_keep)
-                  #
-                  # 	se = se |> drop_samples_complete_confounder(sex, ethnicity_simplified)
-                  #
-                  # }
-                  #
-                  # factors =
-                  # 	c( "sex", "ethnicity_simplified") |>
-                  # 	enframe(value = "factor") |>
-                  # 	mutate(n = map_int(
-                  # 		factor, ~ se |> select(.x) |> distinct() |> nrow()
-                  # 	)) |>
-                  # 	filter(n>1) |>
-                  # 	pull(factor) |>
-                  # 	map(sym) |>
-                  # 	unlist()
-
                   se |>
-                    keep_abundant(.abundance = counts_scaled, factor_of_interest = c(sex, ethnicity_simplified), minimum_counts = 50) |>
+                    keep_abundant(
+                      .abundance = counts_scaled,
+                      factor_of_interest = c(sex, ethnicity_simplified),
+                      minimum_counts = 50
+                    ) |>
                     rownames()
-
                 },
                 .progress = TRUE
               )) |>
@@ -536,160 +540,135 @@ tar_script({
               unlist() |>
               unique()
 
+            # Filter the original dataset to keep only the abundant genes
             .x |> filter(.feature %in% abundant_genes)
           }
 
         }
       ))
-    # se_df |>
-    # 	mutate(data = map(
-    # 		data,
-    # 		~ {
-    #
-    # 			# Select abundant genes within tissues and unite
-    # 			abundant_genes =
-    # 				.x |>
-    # 				nest(data = -cell_type_harmonised) |>
-    #
-    # 				# Filter if only one sex
-    # 				mutate(abundant_genes = map(
-    # 					data,
-    # 					~ {
-    #
-    # 						se = .x
-    #
-    # 						# # Avoid indeterminability
-    # 						# if(ncol(se) > 0) {
-    # 						#
-    # 						# 	ethnicity_to_keep = se |> pivot_sample() |> count(ethnicity_simplified) |> filter(n >1) |> pull(ethnicity_simplified)
-    # 						# 	se = se |> filter(ethnicity_simplified %in% ethnicity_to_keep)
-    # 						#
-    # 						# 	sex_to_keep = se |> pivot_sample() |> count(sex) |> filter(n >1) |> pull(sex)
-    # 						# 	se = se |> filter(sex %in% sex_to_keep)
-    # 						#
-    # 						# 	se = se |> drop_samples_complete_confounder(sex, ethnicity_simplified)
-    # 						#
-    # 						# }
-    # 						#
-    # 						# factors =
-    # 						# 	c( "sex", "ethnicity_simplified") |>
-    # 						# 	enframe(value = "factor") |>
-    # 						# 	mutate(n = map_int(
-    # 						# 		factor, ~ se |> select(.x) |> distinct() |> nrow()
-    # 						# 	)) |>
-    # 						# 	filter(n>1) |>
-    # 						# 	pull(factor) |>
-    # 						# 	map(sym) |>
-    # 						# 	unlist()
-    #
-    # 						se |>
-    # 						keep_abundant(.abundance = counts_scaled, factor_of_interest = c(sex, ethnicity_simplified), minimum_counts = 50) |>
-    # 						rownames()
-    #
-    # 						},
-    # 					.progress = TRUE
-    # 				)) |>
-    # 				pull(abundant_genes) |>
-    # 				unlist() |>
-    # 				unique()
-    #
-    # 			.x |> filter(.feature %in% abundant_genes)
-    #
-    # 		}
-    # 	))
   }
 
+  # This function performs several steps to calculate dispersion:
+  # Filters out samples with only one instance in the categories of sex or ethnicity to avoid issues with statistical indeterminacy.
+  # Drops samples that are complete confounders based on sex and ethnicity.
+  # Calculates dispersion estimates differently based on the size of the dataset:
+  # For smaller datasets (<1000 samples), it uses all samples to calculate dispersion.
+  # For larger datasets, it samples a subset of the data (up to 2000 samples) and then calculates dispersion on this subset to reduce computational load.
+  # Dispersion is calculated using functions from RNA-seq analysis packages (like estimateDisp and estimateTrendedDisp), which handle the complexity of dispersion estimation in gene expression data. This approach is critical in differential expression analysis, as it helps to account for the variability inherent in such data.
+  # # Define a function 'se_add_dispersion' to add dispersion estimates to single-cell experiment data
   se_add_dispersion = function(se_df){
-
+    # Print a message indicating the start of the process
     print("Start add dispersion")
+    # Perform garbage collection to free up memory
     gc()
 
+    # Process the input data frame
     se_df |>
       mutate(data = map(
         data,
         ~ {
-
-          # Because I have nested map
+          # Assign the current SingleCellExperiment object to 'se'
           se = .x
 
-          # Avoid indeterminability
+          # Check if there are enough columns (samples) to proceed
           if(ncol(se) > 0) {
-
-            ethnicity_to_keep = se |> pivot_sample() |> count(ethnicity_simplified) |> filter(n >1) |> pull(ethnicity_simplified)
+            # Filter out ethnicities with only one sample
+            ethnicity_to_keep = se |> pivot_sample() |> count(ethnicity_simplified) |> filter(n > 1) |> pull(ethnicity_simplified)
             se = se |> filter(ethnicity_simplified %in% ethnicity_to_keep)
 
-            sex_to_keep = se |> pivot_sample() |> count(sex) |> filter(n >1) |> pull(sex)
+            # Filter out sex categories with only one sample
+            sex_to_keep = se |> pivot_sample() |> count(sex) |> filter(n > 1) |> pull(sex)
             se = se |> filter(sex %in% sex_to_keep)
           }
+
+          # Drop complete confounders based on sex and ethnicity
           if(ncol(se) > 0) {
             se = se |> drop_samples_complete_confounder(sex, ethnicity_simplified)
           }
 
-          # If SE empty add dummy dispersion
-          if(ncol(se) == 0) rowData(se)$dispersion = rep(NA, nrow(se))
-          else if(ncol(se)<1000) {
-
+          # Handle cases where the SingleCellExperiment object is empty
+          if(ncol(se) == 0) {
+            rowData(se)$dispersion = rep(NA, nrow(se))
+          }
+          else if(ncol(se) < 1000) {
+            # Calculate dispersion for datasets with fewer than 1000 columns
+            # Create a model design matrix based on sex and ethnicity
             factors =
-              c( "sex", "ethnicity_simplified") |>
+              c("sex", "ethnicity_simplified") |>
               enframe(value = "factor") |>
               mutate(n = map_int(
                 factor, ~ se |> select(.x) |> distinct() |> nrow()
               )) |>
-              filter(n>1) |>
+              filter(n > 1) |>
               pull(factor) |>
               str_c(collapse = " + ")
 
-            my_design = glue("~ {factors}") |> as.formula() |> model.matrix( data = colData(se) |> droplevels())
-            rowData(se)$dispersion =  se |> assay("counts_scaled") |> estimateDisp(design = my_design) %$% tagwise.dispersion
+            my_design = glue("~ {factors}") |> as.formula() |> model.matrix(data = colData(se) |> droplevels())
+            rowData(se)$dispersion = se |> assay("counts_scaled") |> estimateDisp(design = my_design) %$% tagwise.dispersion
           }
           else {
-
+            # For larger datasets, sample a subset of columns
             sampled_samples = sample(seq_len(ncol(se)), size = min(ncol(se), 2000))
 
+            # Create a model design matrix for the sampled subset
             factors =
-              c( "sex", "ethnicity_simplified") |>
+              c("sex", "ethnicity_simplified") |>
               enframe(value = "factor") |>
               mutate(n = map_int(
-                factor, ~ se[,sampled_samples, drop=FALSE]  |> select(.x) |> distinct() |> nrow()
+                factor, ~ se[,sampled_samples, drop=FALSE] |> select(.x) |> distinct() |> nrow()
               )) |>
-              filter(n>1) |>
+              filter(n > 1) |>
               pull(factor) |>
               str_c(collapse = " + ")
 
             my_design = model.matrix(~ sex + ethnicity_simplified, data = se[,sampled_samples, drop=FALSE] |> colData() |> droplevels())
 
+            # Estimate trended dispersion based on the sampled subset
             rowData(se)$dispersion =
-              assay(se[,sampled_samples, drop=FALSE] , "counts_scaled") |>
+              assay(se[,sampled_samples, drop=FALSE], "counts_scaled") |>
               estimateTrendedDisp(design = my_design, subset=1000, rowsum.filter=10)
           }
 
+          # Return the processed SingleCellExperiment object
           se
         }
       ))
 
   }
 
-  add_number_of_gene_chunks =	function(se_df){
-
+  # In this function, the number of gene chunks is calculated based on the number of distinct samples (sample_se) in each SingleCellExperiment object. The calculation involves dividing the number of distinct samples by 50, multiplying the result by 10, and then rounding up to the nearest whole number. There's also a safeguard to ensure a minimum of one chunk and a maximum limit of 10,000 chunks. This method of chunking is typically used to balance computational efficiency with the need to process large datasets in manageable segments.
+  # Define a function 'add_number_of_gene_chunks' to calculate and add the number of gene chunks in single-cell experiment data
+  add_number_of_gene_chunks = function(se_df){
+    # Print a message indicating the start of the chunk calculation process
     print("Start add number of chunks")
+    # Perform garbage collection to free up memory
     gc()
 
+    # Process the input data frame
     se_df |>
       mutate(number_of_chunks = map_int(
         data,
-        ~ .x |>
-          distinct(sample_se) |>
-          nrow() |>
+        ~ {
+          # Process the current SingleCellExperiment object
+          se = .x
+          # Count the distinct sample identifiers (sample_se)
+          distinct_samples = se |>
+            distinct(sample_se) |>
+            nrow()
 
-          # Avoid 0 because it will cause error
-          # And because ifI have 0 samples I still have one chunk of genes
-          max(1) |>
-          divide_by(50) |>
-          multiply_by(10) |>
-          ceiling() |>
+          # Calculate the number of chunks
+          # Ensure there's at least one chunk even if there are no samples
+          # Divide the number of samples by 50 and scale it up by a factor of 10
+          # The ceiling function ensures the result is rounded up to the nearest whole number
+          number_of_chunks = max(1, distinct_samples) |>
+            divide_by(50) |>
+            multiply_by(10) |>
+            ceiling()
 
-          # Otherwise it takes more than 20 minutes
-          min(10000)
+          # Limit the number of chunks to a maximum of 10000
+          # This is likely a safeguard to prevent excessive computational load
+          min(number_of_chunks, 10000)
+        }
       ))
   }
 
