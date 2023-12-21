@@ -1,3 +1,28 @@
+# The ultimate goal of the script is to process, analyze, and visualize this intricate data to identify genes that are expressed differently in males and females. This kind of analysis is crucial for understanding biological differences between sexes at a molecular level, which can have important implications for medical research, including the development of targeted therapies and personalized medicine.
+#
+# To achieve this, the script performs several key tasks:
+#
+# Data Preparation: It starts by organizing and preparing the sequencing data, making it ready for analysis.
+# This involves filtering the data to focus on specific types of cells or tissues and formatting it into a
+# structure suitable for detailed analysis.
+#
+# Comprehensive Analysis: The script then employs advanced statistical methods to sift through the data,
+# looking for genes that show significant differences in expression between male and female samples.
+# This step is complex and requires careful handling of the data to ensure accurate results.
+#
+# Visualizing the Results: After the analysis, the script creates various graphical representations
+# of the findings. These visualizations make it easier to understand and interpret the results,
+# highlighting the key differences in gene expression between sexes.
+#
+# Summarizing Insights: Finally, the script compiles the results into a comprehensive format,
+# such as a detailed chart or graph, which can be used for further scientific research or reporting.
+#
+# In summary, this script is a powerful tool in the field of genomics, enabling researchers to delve
+# deep into the genetic differences between males and females at a cellular level.
+# The insights gained from this analysis have the potential to contribute significantly to our
+# understanding of human biology and disease.
+
+
 library(tidyverse)
 library(targets)
 library(glue)
@@ -1029,15 +1054,32 @@ proportion_of_interaction_only =
   theme(axis.title.y = element_blank(), axis.text.y = element_text(angle=90, hjust = 0.5))
 
 # Calculating the contribution of age-interaction in the number of sex-dependent genes
-contribution_of_age_interaction =
-  de |>
-  filter(!is.na(P_sex_adjusted)) |>  # Filtering out NA adjusted p-values
-  filter(!.feature %in% gene_chr$ID) |>  # Excluding genes listed in gene_chr
-  add_count(cell_type_harmonised, name = "gene_number") |>  # Counting genes per cell type
-  mutate(de_only_in_sex = P_sex_adjusted < 0.05 & P_age_days.sex_adjusted > 0.05 & P_age_days_adjusted > 0.05) |>  # Defining differential expression by sex
-  mutate(de_only_in_interaction = P_sex_adjusted > 0.05 & P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>  # Defining differential expression by interaction
+de |>
+  filter(!is.na(P_sex_adjusted)) |>
+  filter(!.feature %in% gene_chr$ID) |>
+  add_count(cell_type_harmonised, name = "gene_number") |>
+  mutate(de_only_in_sex = P_sex_adjusted < 0.05 &	P_age_days.sex_adjusted > 0.05 & P_age_days_adjusted > 0.05) |>
+  mutate(de_only_in_interaction = P_sex_adjusted > 0.05 &	P_age_days.sex_adjusted < 0.05 & P_age_days_adjusted > 0.05) |>
   dplyr::count(
     cell_type_harmonised, gene_number,
     de_only_in_sex, de_only_in_interaction
-  ) |>  # Counting differential expressions
+  ) |>
+  filter(de_only_in_sex + de_only_in_interaction == 1) |>
+  mutate(proportion_of_significant = n/gene_number) |>
+  mutate(label = if_else(de_only_in_sex, "de_only_in_sex", "de_only_in_interaction")) |> select(cell_type_harmonised, proportion_of_significant, label) |> pivot_wider(names_from = label , values_from = proportion_of_significant) |> mutate(contribution = de_only_in_interaction / (de_only_in_sex + de_only_in_interaction) ) |> pull(contribution) |> mean(na.rm=TRUE)
 
+p = ((
+  plot_spacer() | plot_sex_cell_type_most_de
+) + plot_layout(  width = c(2, 1) )) / ((
+  plot_sex_cell_type_upset | proportion_of_interaction_only | plot_spacer()
+) + plot_layout(  width = c(1, 1, 1) ) ) +
+  plot_layout(  height = c(30, 20) )
+
+ggsave(
+  "plot_bio_application.pdf",
+  plot = p,
+  units = c("mm"),
+  width = 70 *2,
+  height = 55 *2 ,
+  limitsize = FALSE
+)
