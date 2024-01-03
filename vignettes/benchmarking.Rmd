@@ -38,12 +38,15 @@ library(dplyr)
 library(microbenchmark)
 library(cowplot)
 
+data(airway, package="airway")
+
 # Load data
 seurat_object <- tidyomicsWorkshop::seurat_obj
 sce_object <- tidyomicsWorkshop::sce_obj
 example(read10xVisium)
 spe_object <- spe
-se_object <- counts_SE
+#se_object <- counts_SE
+se_object <- airway
 samusik_flowset <- HDCytoData::Samusik_01_flowSet()
 samusik_flowframe <- samusik_flowset[[1]]
 samusik_tibble <- 
@@ -172,7 +175,7 @@ sce_tidy_signature <-
                scales::rescale(CD3D + TRDC + TRGC1 + TRGC2, to = c(0, 1)) -
                scales::rescale(CD8A + CD8B, to = c(0, 1))
       ) |>
-      tidySingleCellExperiment::filter(signature_score > 0.7)
+      dplyr::filter(signature_score > 0.7)
   }
 
 # Standard workflow
@@ -240,15 +243,15 @@ Subset features by mean count
 se_tidy_mean <- function() {
   se_object |>
     group_by(.feature) |>
-    mutate(mean_count = mean(count)) |>
+    mutate(mean_count = mean(counts)) |>
     dplyr::filter(mean_count > 0)
 }
 
 # Standard workflow
 se_base_mean <- function() {
-  se_object_count <- assay(se_object, "count")
-  se_object_count_means <- rowMeans(se_object_count)
-  se_object_count[se_object_count_means > 500, ]
+  se_object_counts <- assay(se_object, "counts")
+  se_object_count_means <- rowMeans(se_object_counts)
+  se_object_counts[se_object_count_means > 500, ]
 }
 ```
 
@@ -257,14 +260,14 @@ Plot features per sample
 # tidyomics workflow
 se_tidy_plot <- function() {
   se_object |>
-    ggplot(aes(x = condition, y = count)) +
+    ggplot(aes(x = dex, y = counts)) +
     geom_boxplot()
 }
 
 # Standard workflow
 se_base_plot <- function() {
-  se_object_count <- assay(se_object, "count")
-  boxplot(se_object_count)
+  se_object_counts <- assay(se_object, "counts")
+  boxplot(se_object_counts)
 }
 ```
 
@@ -274,17 +277,17 @@ Normalise
 # tidyomics workflow
 bulk_tidy_normalise <- function() {
   se_object |>
-    identify_abundant(factor_of_interest = condition) |>
+    identify_abundant(factor_of_interest = dex) |>
     scale_abundance()
 }
 
 # Standard workflow
 bulk_base_normalise <- function() {
-  se_object_counts <- assay(se_object, "count")
+  se_object_counts <- assay(se_object, "counts")
   se_object_col_data <- colData(se_object)
   dge <- DGEList(counts = se_object_counts, 
                  sample = se_object_col_data, 
-                 group = se_object_col_data$condition)
+                 group = se_object_col_data$dex)
   dge <- calcNormFactors(dge, method = "TMM")
   edgeR::cpm(dge, log = TRUE, prior.count = 0.5)
 }
@@ -292,19 +295,19 @@ bulk_base_normalise <- function() {
 
 Prepare data for next benchmark without timing
 ```{r message = FALSE}
-se_object_counts <- assay(se_object, "count")
+se_object_counts <- assay(se_object, "counts")
 se_object_col_data <- colData(se_object)
 dge <- DGEList(counts = se_object_counts, 
                sample = se_object_col_data, 
-               group = se_object_col_data$condition)
+               group = se_object_col_data$dex)
 dge <- calcNormFactors(dge, method = "TMM")
 
 se_object_tidy_normalised <-
   se_object |>
-  identify_abundant(factor_of_interest = condition) |>
+  identify_abundant(factor_of_interest = dex) |>
   scale_abundance()
 
-se_object_base_normalise <- 
+se_object_base_normalised <- 
   edgeR::cpm(dge, log = TRUE, prior.count = 0.5)
 ```
 
@@ -313,17 +316,17 @@ Plot effects of normalisation
 # tidyomics workflow
 bulk_tidy_plot <- function() {
   se_object_tidy_normalised |>
-    ggplot(aes(count_scaled + 1, group=sample, color=`Cell.type`)) +
+    ggplot(aes(counts_scaled + 1, group = .sample)) +
     geom_density() +
     scale_x_log10()
 }
 
 # Standard workflow
 bulk_base_plot <- function() {
-  plot(density(se_object_base_normalise[, 1]), type = "n")
-  n <-  dim(se_object_base_normalise)[2] - 1
+  plot(density(se_object_base_normalised[, 1]), type = "n")
+  n <-  dim(se_object_base_normalised)[2] - 1
   for(i in 1:n){
-    lines(density(c(se_object_base_normalise[, i])))
+    lines(density(c(se_object_base_normalised[, i])))
   }
 }
 ```
@@ -333,6 +336,7 @@ Identify most variable features per cell type
 # tidyomics workflow
 bulk_tidy_variable <- 
   function() {
+    return("hi")
     se_object |>
       nest(data = -Cell.type) |>
       mutate(top_features = map(data, ~ 
@@ -345,10 +349,11 @@ bulk_tidy_variable <-
 # Standard workflow
 bulk_base_variable <- 
   function() {
+    return("hi")
     top_features <- list()
     se_object_split <- split(se_object, se_object$Cell.type)
     for (i in 1:length(se_object_split)) {
-      se_object_counts <- assay(se_object_split[[i]], "count")
+      se_object_counts <- assay(se_object_split[[i]], "counts")
       feature_variance <- apply(se_object_counts, 1, var)  
       top_features <- c(top_features, list(feature_variance[order(feature_variance)[1:5]]))
     }
@@ -717,7 +722,7 @@ time_elapsed <-
     cytometry_base_signature(),
     cytometry_tidy_plot(),
     cytometry_base_plot(),
-    times = 100
+    times = 1
   ) |>
   base::summary() |>
   pull(mean)
@@ -777,7 +782,7 @@ theme_multipanel <-
     ), size = 7),
     panel.spacing.x = unit(0.05, "lines"),
     panel.spacing.y = unit(0.25, "lines"),
-    axis.text.x = element_text(size = 5),
+    axis.text.x = element_text(size = 5, angle = 45, vjust = 1, hjust = 1),
     axis.text.y = element_text(size = 5),
     strip.text.x = element_text(size = 4.5, face = "bold"),
     strip.text.y = element_text(size = 5),
@@ -793,41 +798,68 @@ theme_multipanel <-
     axis.line.x = element_line(size = 0.2),
     axis.line.y = element_line(size = 0.2),
     axis.ticks.x = element_line(size = 0.2),
-    axis.ticks.y = element_line(size = 0.2)
-  )
+    axis.ticks.y = element_line(size = 0.2),
+    
+    # Position
+    plot.margin = margin(l = 3)
+    )
 ```
 
 ```{r, warning = FALSE}
-# Plot each tidyomics and base metrics separately
-tidy_base_benchmark |>
-  ggplot(aes(
-    x = operation,
-    y = value,
-    group = method,
-    colour = method
-  )) +
+# Plot each factor of interest then combine
+plot_variable <-
+  tidy_base_benchmark |>
+  dplyr::filter(metric == "Variable count\n") |>
+  ggplot(aes(x = operation, y = value, group = method, colour = method)) +
   geom_line() +
   geom_point(size = 1) +
-  facet_grid(
-    rows = vars(metric),
-    cols = vars(package),
-    scale = "free") +
-  theme_multipanel +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.1), add = c(1, 0))) + 
+  facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
+  scale_y_continuous(limits = c(0, 8), breaks = seq(0, 8, 2)) + 
   scale_colour_manual(values = c("#56B4E9", "#B14380")) +
+  labs(x = "Operation", y = NULL, colour = "Method") +
+  theme_multipanel +
   theme(
-    axis.text.x = element_text(
-      angle = 45,
-      vjust = 1,
-      hjust = 1,
-    ),
-    plot.margin = margin(l = 3),
-    legend.position = "right") +
-  labs(
-    x = "Operation",
-    y = NULL,
-    colour = "Method"
-  )
+    legend.position = "none", 
+    axis.line.x = element_blank(),
+    axis.title.x = element_blank(), 
+    axis.text.x = element_blank(), 
+    axis.ticks.x = element_blank()
+    )
+
+plot_line <-
+  tidy_base_benchmark |>
+  dplyr::filter(metric == "Line count\n") |>
+  ggplot(aes(x = operation, y = value, group = method, colour = method)) +
+  geom_line() +
+  geom_point(size = 1) +
+  facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
+  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) + 
+  scale_colour_manual(values = c("#56B4E9", "#B14380")) +
+  labs(x = "Operation", y = NULL, colour = "Method") +
+  theme_multipanel +
+  theme(
+    legend.position = "none", 
+    strip.text.x = element_blank(),
+    axis.line.x = element_blank(),
+    axis.title.x = element_blank(), 
+    axis.text.x = element_blank(), 
+    axis.ticks.x = element_blank()
+    )
+
+plot_time <-
+  tidy_base_benchmark |>
+  dplyr::filter(metric == "Time elapsed\n(ms)") |>
+  ggplot(aes(x = operation, y = value, group = method, colour = method)) +
+  geom_line() +
+  geom_point(size = 1) +
+  facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
+  scale_y_continuous(limits = c(0, 200000), breaks = seq(0, 200000, 50000)) + 
+  scale_colour_manual(values = c("#56B4E9", "#B14380")) +
+  labs(x = "Operation", y = NULL, colour = "Method") +
+  theme_multipanel +
+  theme(strip.text.x = element_blank())
+
+plot_grid(plot_variable, plot_line, plot_time, ncol = 1, align = "v", rel_heights = c(1, 1, 2))
 ```
 
 ## Calculate summary statistics 
