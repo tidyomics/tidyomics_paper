@@ -38,15 +38,13 @@ library(dplyr)
 library(microbenchmark)
 library(cowplot)
 
-data(airway, package="airway")
-
 # Load data
 seurat_object <- tidyomicsWorkshop::seurat_obj
 sce_object <- tidyomicsWorkshop::sce_obj
 example(read10xVisium)
 spe_object <- spe
-#se_object <- counts_SE
-se_object <- airway
+data(se_mini)
+se_object <- se_mini
 samusik_flowset <- HDCytoData::Samusik_01_flowSet()
 samusik_flowframe <- samusik_flowset[[1]]
 samusik_tibble <- 
@@ -213,61 +211,67 @@ spe_base_aggregate <-
   }
 ```
 
-Plot feature counts per cell
+Plot feature count in region
 ```{r}
 # tidyomics workflow
 spe_tidy_plot <- 
   function() {
-    spe_object |>
-      join_features(spe_object |> counts() |> rownames(), shape = "long") |>
-      group_by(.cell, sample_id) |> 
-      summarise(cell_sums = sum(.abundance_counts)) |>
-      ggplot(aes(x = sample_id, y = cell_sums, group = sample_id)) +
-      geom_boxplot()
+  spe_object |>
+    join_features("ENSMUSG00000016918", shape = "wide") |>
+    mutate(in_region = if_else(array_row < 50 & array_col < 50, TRUE, FALSE)) |>
+    ggplot(aes(x = ENSMUSG00000016918, colour = in_region)) +
+    geom_density()
   }
 
-# Standard workflow
 spe_base_plot <- 
   function() {
-    spe_object_split <- split(spe_object, spe_object$sample_id)
-    spe_object_split_counts <- lapply(spe_object_split, counts)
-    spe_object_split_counts_sums <- lapply(spe_object_split_counts, colSums)
-    boxplot(spe_object_split_counts_sums)
+    spe_counts <- assay(spe_object, "counts")
+    spe_object$ENSMUSG00000016918 <- spe_counts["ENSMUSG00000016918", ]
+    spe_object_in_region <- spe_object[, spe_object$array_row < 50 & spe_object$array_col < 50]
+    spe_object_not_in_region <- spe_object[, spe_object$array_row >= 50 & spe_object$array_col >= 50]
+    plot(density(spe_object_not_in_region$ENSMUSG00000016918), col = "blue")
+    lines(density(spe_object_in_region$ENSMUSG00000016918), col = "red")
   }
 ```
 
 ## tidySummarizedExperiment 
-Subset features by mean count
+Sum feature counts per cell type
 ```{r}
 # tidyomics workflow
 se_tidy_mean <- function() {
   se_object |>
-    group_by(.feature) |>
-    mutate(mean_count = mean(counts)) |>
-    dplyr::filter(mean_count > 0)
+    group_by(.sample, Cell.type) |>
+    summarise(sum_count = sum(count))
 }
 
 # Standard workflow
 se_base_mean <- function() {
-  se_object_counts <- assay(se_object, "counts")
-  se_object_count_means <- rowMeans(se_object_counts)
-  se_object_counts[se_object_count_means > 500, ]
-}
+  se_object_cell_type <- se_object
+  colnames(se_object_cell_type) <- colData(se_object_cell_type)$Cell.type
+  se_object_cell_type_counts <- assay(se_object_cell_type, "count")
+  se_object_cell_type_counts <- t(rowsum(t(se_object_cell_type_counts), group = colnames(se_object_cell_type_counts)))
+  colSums(se_object_counts_cell_type)
+} 
 ```
 
-Plot features per sample
+Plot feature count per condition
 ```{r}
 # tidyomics workflow
 se_tidy_plot <- function() {
   se_object |>
-    ggplot(aes(x = dex, y = counts)) +
-    geom_boxplot()
+    dplyr::filter(.feature == "CD2") |>
+    ggplot(aes(x = count, colour = condition)) +
+    geom_density()
 }
 
 # Standard workflow
 se_base_plot <- function() {
-  se_object_counts <- assay(se_object, "counts")
-  boxplot(se_object_counts)
+  se_counts <- assay(se_object, "count")
+  colData(se_object)$CD2 <- se_counts["CD2", ]
+  se_object_condition_true <- se_object[, colData(se_object)$condition == TRUE]
+  se_object_condition_false <- se_object[, colData(se_object)$condition == FALSE]
+  plot(density(colData(se_object_condition_true)$CD2), col = "blue")
+  lines(density(colData(se_object_condition_false)$CD2), col = "red")
 }
 ```
 
@@ -277,53 +281,52 @@ Normalise
 # tidyomics workflow
 bulk_tidy_normalise <- function() {
   se_object |>
-    identify_abundant(factor_of_interest = dex) |>
+    identify_abundant(factor_of_interest = Cell.type) |>
     scale_abundance()
 }
 
 # Standard workflow
 bulk_base_normalise <- function() {
-  se_object_counts <- assay(se_object, "counts")
+  se_object_counts <- assay(se_object, "count")
   se_object_col_data <- colData(se_object)
   dge <- DGEList(counts = se_object_counts, 
                  sample = se_object_col_data, 
-                 group = se_object_col_data$dex)
+                 group = se_object_col_data$Cell.type)
   dge <- calcNormFactors(dge, method = "TMM")
-  edgeR::cpm(dge, log = TRUE, prior.count = 0.5)
+  edgeR::cpm(dge)
 }
 ```
 
 Prepare data for next benchmark without timing
 ```{r message = FALSE}
-se_object_counts <- assay(se_object, "counts")
+se_object_counts <- assay(se_object, "count")
 se_object_col_data <- colData(se_object)
 dge <- DGEList(counts = se_object_counts, 
                sample = se_object_col_data, 
-               group = se_object_col_data$dex)
+               group = se_object_col_data$Cell.type)
 dge <- calcNormFactors(dge, method = "TMM")
+se_object_base_normalised <- edgeR::cpm(dge)
 
 se_object_tidy_normalised <-
   se_object |>
-  identify_abundant(factor_of_interest = dex) |>
+  identify_abundant(factor_of_interest = Cell.type) |>
   scale_abundance()
-
-se_object_base_normalised <- 
-  edgeR::cpm(dge, log = TRUE, prior.count = 0.5)
 ```
 
 Plot effects of normalisation
-```{r}
+```{r, warning=FALSE}
 # tidyomics workflow
 bulk_tidy_plot <- function() {
   se_object_tidy_normalised |>
-    ggplot(aes(counts_scaled + 1, group = .sample)) +
+    ggplot(aes(count_scaled + 1, group = .sample)) +
     geom_density() +
     scale_x_log10()
 }
 
 # Standard workflow
 bulk_base_plot <- function() {
-  plot(density(se_object_base_normalised[, 1]), type = "n")
+  se_object_base_normalised[-1] <- se_object_base_normalised[-1] + 1
+  plot(density(se_object_base_normalised[, 1]), type = "n", log = "x")
   n <-  dim(se_object_base_normalised)[2] - 1
   for(i in 1:n){
     lines(density(c(se_object_base_normalised[, i])))
@@ -336,12 +339,11 @@ Identify most variable features per cell type
 # tidyomics workflow
 bulk_tidy_variable <- 
   function() {
-    return("hi")
     se_object |>
       nest(data = -Cell.type) |>
       mutate(top_features = map(data, ~ 
         .x |>
-          keep_variable(top = 10) |>
+          keep_variable(top = 5) |>
           rownames()
       ))
   }
@@ -349,11 +351,10 @@ bulk_tidy_variable <-
 # Standard workflow
 bulk_base_variable <- 
   function() {
-    return("hi")
     top_features <- list()
     se_object_split <- split(se_object, se_object$Cell.type)
     for (i in 1:length(se_object_split)) {
-      se_object_counts <- assay(se_object_split[[i]], "counts")
+      se_object_counts <- assay(se_object_split[[i]], "count")
       feature_variance <- apply(se_object_counts, 1, var)  
       top_features <- c(top_features, list(feature_variance[order(feature_variance)[1:5]]))
     }
@@ -638,13 +639,13 @@ package <-
 
 operation <- 
   c(
-    "Aggregate cells by variable", "Plot feature counts per cell", "Subset cells by feature",
-    "Aggregate cells by variable", "Plot feature counts per cell", "Subset cells by feature",
-    "Aggregate cells by variable", "Plot feature counts per cell",
-    "Subset features by mean count", "Plot features per sample",
+    "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
+    "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
+    "Aggregate cells by variable", "Plot feature counts by region",
+    "Sum feature counts by cell type", "Plot feature counts by condition",
     "Normalise feature", "Plot normalised feature density", "Find most variable features", 
     "Aggregate overlaps", "Plot feature set distances", "Grouped disjoin ranges",
-     "Downsample cells", "Aggregate cells by variable", "Normalise features", "Subset cells by feature", "Plot PCA" 
+    "Downsample cells", "Aggregate cells by variable", "Normalise features", "Subset cells by feature signature", "Plot PCA" 
   ) |>
   rep(each = 2)
 
@@ -661,8 +662,8 @@ variable_count <-
     0, 2, 0, 3, 0, 2, # tidySeurat
     0, 2, 0, 3, 0, 2, # tidySingleCellExperiment
     0, 2, 0, 3, # tidySpatialExperiment
-    0, 2, 0, 1, # tidySummarizedExperiment
-    0, 3, 0, 1, 0, 4, # tidybulk
+    0, 2, 0, 3, # tidySummarizedExperiment
+    0, 3, 0, 1, 0, 5, # tidybulk
     0, 3, 0, 3, 0, 6, # plyranges
     0, 6, 0, 7, 0, 3, 0, 4, 0, 3 # tidytof
   )
@@ -671,9 +672,9 @@ line_count <-
   c(
     2, 3, 3, 4, 7, 10, # tidySeurat
     2, 3, 3, 4, 7, 10, # tidySingleCellExperiment
-    2, 3, 6, 4, # tidySpatialExperiment
-    4, 3, 3, 2, # tidySummarizedExperiment
-    3, 7, 4, 5, 7, 7, # tidybulk
+    2, 3, 5, 6, # tidySpatialExperiment
+    3, 5, 4, 6, # tidySummarizedExperiment
+    3, 7, 4, 6, 7, 7, # tidybulk
     4, 4, 7, 8, 7, 10, # plyranges
     2, 11, 4, 14, 3, 6, 3, 11, 3, 6 # tidytof
   )
@@ -722,7 +723,7 @@ time_elapsed <-
     cytometry_base_signature(),
     cytometry_tidy_plot(),
     cytometry_base_plot(),
-    times = 1
+    times = 2
   ) |>
   base::summary() |>
   pull(mean)
@@ -810,6 +811,7 @@ theme_multipanel <-
 plot_variable <-
   tidy_base_benchmark |>
   dplyr::filter(metric == "Variable count\n") |>
+  mutate(value = as.integer(value)) |>
   ggplot(aes(x = operation, y = value, group = method, colour = method)) +
   geom_line() +
   geom_point(size = 1) +
@@ -833,7 +835,7 @@ plot_line <-
   geom_line() +
   geom_point(size = 1) +
   facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
-  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) + 
+  scale_y_continuous(limits = c(0, 15), breaks = seq(0, 15, 5)) + 
   scale_colour_manual(values = c("#56B4E9", "#B14380")) +
   labs(x = "Operation", y = NULL, colour = "Method") +
   theme_multipanel +
@@ -853,13 +855,13 @@ plot_time <-
   geom_line() +
   geom_point(size = 1) +
   facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
-  scale_y_continuous(limits = c(0, 200000), breaks = seq(0, 200000, 50000)) + 
+  scale_y_continuous(limits = c(0, 2000), breaks = seq(0, 2000, 1000)) + 
   scale_colour_manual(values = c("#56B4E9", "#B14380")) +
   labs(x = "Operation", y = NULL, colour = "Method") +
   theme_multipanel +
   theme(strip.text.x = element_blank())
 
-plot_grid(plot_variable, plot_line, plot_time, ncol = 1, align = "v", rel_heights = c(1, 1, 2))
+plot_grid(plot_variable, plot_line, plot_time, ncol = 1, align = "v", rel_heights = c(1, 1, 1.6))
 ```
 
 ## Calculate summary statistics 
