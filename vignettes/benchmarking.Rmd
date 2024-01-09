@@ -552,7 +552,7 @@ cytometry_base_normalise <- function() {
   transform_list <- transformList(from = colnames(result), tfun = asinh_transformation)
   result <- transform(result, transform_list)
   result@exprs <- apply(result@exprs, MARGIN = 2, FUN = scales::rescale)
-  return(result)
+  return(result) # Not included in line count
 }
 ```
 
@@ -676,7 +676,7 @@ line_count <-
     3, 5, 4, 6, # tidySummarizedExperiment
     3, 7, 4, 6, 7, 7, # tidybulk
     4, 4, 7, 8, 7, 10, # plyranges
-    2, 11, 4, 14, 3, 6, 3, 11, 3, 6 # tidytof
+    2, 11, 4, 14, 3, 5, 3, 11, 3, 6 # tidytof
   )
 
 time_elapsed <-
@@ -723,7 +723,7 @@ time_elapsed <-
     cytometry_base_signature(),
     cytometry_tidy_plot(),
     cytometry_base_plot(),
-    times = 2
+    times = 20
   ) |>
   base::summary() |>
   pull(mean)
