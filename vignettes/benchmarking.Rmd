@@ -102,8 +102,7 @@ seurat_tidy_signature <-
       join_features(features = c("CD3D", "TRDC", "TRGC1", "TRGC2", "CD8A", "CD8B"), shape = "wide") |>
       mutate(signature_score =
                scales::rescale(CD3D + TRDC + TRGC1 + TRGC2, to = c(0, 1)) -
-               scales::rescale(CD8A + CD8B, to = c(0, 1))
-      ) |>
+               scales::rescale(CD8A + CD8B, to = c(0, 1))) |>
       dplyr::filter(signature_score > 0.7)
   }
 
@@ -171,8 +170,7 @@ sce_tidy_signature <-
       join_features(features = c("CD3D", "TRDC", "TRGC1", "TRGC2", "CD8A", "CD8B"), shape = "wide") |>
       mutate(signature_score =
                scales::rescale(CD3D + TRDC + TRGC1 + TRGC2, to = c(0, 1)) -
-               scales::rescale(CD8A + CD8B, to = c(0, 1))
-      ) |>
+               scales::rescale(CD8A + CD8B, to = c(0, 1))) |>
       dplyr::filter(signature_score > 0.7)
   }
 
@@ -234,6 +232,34 @@ spe_base_plot <-
   }
 ```
 
+Subset cells by feature signature
+```{r}
+spe_tidy_signature <- 
+  function() {
+    spe_object |>
+      join_features(features = c("ENSMUSG00000016918", "ENSMUSG00000051951", "ENSMUSG00000057715",
+                                 "ENSMUSG00000048960"), shape = "wide") |>
+      mutate(signature_score = 
+        scales::rescale(ENSMUSG00000016918 + ENSMUSG00000051951, to = c(0, 1)) - 
+        scales::rescale(ENSMUSG00000057715 + ENSMUSG00000048960, to = c(0, 1))) |>
+      dplyr::filter(signature_score > 0.7) 
+  }
+
+spe_base_signature <- 
+  function() {
+    counts_positive <-
+      assay(spe_object, "counts")[c("ENSMUSG00000016918","ENSMUSG00000051951"), ] |>
+      colSums() |>
+      scales::rescale(to = c(0, 1))
+    counts_negative <-
+      assay(spe_object, "counts")[c("ENSMUSG00000057715", "ENSMUSG00000048960"), ] |>
+      colSums() |>
+      scales::rescale(to = c(0, 1))
+    spe_object$signature_score <- counts_positive - counts_negative
+    spe_object[, spe_object$signature_score > 0.7]
+  }
+```
+
 ## tidySummarizedExperiment 
 Sum feature counts per cell type
 ```{r}
@@ -273,6 +299,7 @@ se_base_plot <- function() {
   plot(density(colData(se_object_condition_true)$CD2), col = "blue")
   lines(density(colData(se_object_condition_false)$CD2), col = "red")
 }
+
 ```
 
 ## tidybulk
@@ -629,7 +656,7 @@ package <-
   c(
     rep("tidyseurat", 3), 
     rep("tidySingleCellExperiment", 3),
-    rep("tidySpatialExperiment", 2),
+    rep("tidySpatialExperiment", 3),
     rep("tidySummarizedExperiment", 2),
     rep("tidybulk", 3),
     rep("plyranges", 3),
@@ -641,7 +668,7 @@ operation <-
   c(
     "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
     "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
-    "Aggregate cells by variable", "Plot feature counts by region",
+    "Aggregate cells by variable", "Plot feature counts by region", "Subset cells by feature signature",
     "Sum feature counts by cell type", "Plot feature counts by condition",
     "Normalise feature", "Plot normalised feature density", "Find most variable features", 
     "Aggregate overlaps", "Plot feature set distances", "Grouped disjoin ranges",
@@ -651,17 +678,17 @@ operation <-
 
 method <-
   c("tidyomics", "standard") |>
-  rep(times = 42 / 2)
+  rep(times = length(operation) / 2)
 
 metric <-
   c("Line count", "Variable count", "Time elapsed") |>
-  rep(times = 42)
+  rep(times = length(operation))
 
 variable_count <- 
   c(
     0, 2, 0, 3, 0, 2, # tidySeurat
     0, 2, 0, 3, 0, 2, # tidySingleCellExperiment
-    0, 2, 0, 3, # tidySpatialExperiment
+    0, 2, 0, 3, 0, 2, # tidySpatialExperiment
     0, 2, 0, 3, # tidySummarizedExperiment
     0, 3, 0, 1, 0, 5, # tidybulk
     0, 3, 0, 3, 0, 6, # plyranges
@@ -670,9 +697,9 @@ variable_count <-
 
 line_count <- 
   c(
-    2, 3, 3, 4, 7, 10, # tidySeurat
-    2, 3, 3, 4, 7, 10, # tidySingleCellExperiment
-    2, 3, 5, 6, # tidySpatialExperiment
+    2, 3, 3, 4, 6, 10, # tidySeurat
+    2, 3, 3, 4, 6, 10, # tidySingleCellExperiment
+    2, 3, 5, 6, 7, 10, # tidySpatialExperiment
     3, 5, 4, 6, # tidySummarizedExperiment
     3, 7, 4, 6, 7, 7, # tidybulk
     4, 4, 7, 8, 7, 10, # plyranges
@@ -697,6 +724,8 @@ time_elapsed <-
     spe_base_aggregate(),
     spe_tidy_plot(),
     spe_base_plot(),
+    spe_tidy_signature(),
+    spe_base_signature(),
     se_tidy_mean(),
     se_base_mean(),
     se_tidy_plot(),
@@ -723,7 +752,7 @@ time_elapsed <-
     cytometry_base_signature(),
     cytometry_tidy_plot(),
     cytometry_base_plot(),
-    times = 20
+    times = 1
   ) |>
   base::summary() |>
   pull(mean)
