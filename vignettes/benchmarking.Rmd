@@ -261,6 +261,25 @@ spe_base_signature <-
 ```
 
 ## tidySummarizedExperiment 
+Split sample metadata column
+```{r}
+# tidyomics workflow
+se_tidy_split <-
+  function() {
+    se_object |>
+      separate(time, sep = " ", into = c("value", "unit"))
+  }
+
+# Standard workflow
+se_base_split <- 
+  function() {
+    times <- as.character(colData(se_object)$time)
+    times <- data.frame(do.call('rbind', strsplit(times, " ", fixed = TRUE)))
+    cbind(colData(se_object), times)
+  }
+
+```
+
 Sum feature counts per cell type
 ```{r}
 # tidyomics workflow
@@ -299,7 +318,6 @@ se_base_plot <- function() {
   plot(density(colData(se_object_condition_true)$CD2), col = "blue")
   lines(density(colData(se_object_condition_false)$CD2), col = "red")
 }
-
 ```
 
 ## tidybulk
@@ -657,7 +675,7 @@ package <-
     rep("tidyseurat", 3), 
     rep("tidySingleCellExperiment", 3),
     rep("tidySpatialExperiment", 3),
-    rep("tidySummarizedExperiment", 2),
+    rep("tidySummarizedExperiment", 3),
     rep("tidybulk", 3),
     rep("plyranges", 3),
     rep("tidytof", 5)
@@ -669,7 +687,7 @@ operation <-
     "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
     "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
     "Aggregate cells by variable", "Plot feature counts by region", "Subset cells by feature signature",
-    "Sum feature counts by cell type", "Plot feature counts by condition",
+    "Sum feature counts by cell type", "Plot feature counts by condition", "Split sample metadata column",
     "Normalise feature", "Plot normalised feature density", "Find most variable features", 
     "Aggregate overlaps", "Plot feature set distances", "Grouped disjoin ranges",
     "Downsample cells", "Aggregate cells by variable", "Normalise features", "Subset cells by feature signature", "Plot PCA" 
@@ -689,7 +707,7 @@ variable_count <-
     0, 2, 0, 3, 0, 2, # tidySeurat
     0, 2, 0, 3, 0, 2, # tidySingleCellExperiment
     0, 2, 0, 3, 0, 2, # tidySpatialExperiment
-    0, 2, 0, 3, # tidySummarizedExperiment
+    0, 2, 0, 3, 0, 1, # tidySummarizedExperiment
     0, 3, 0, 1, 0, 5, # tidybulk
     0, 3, 0, 3, 0, 6, # plyranges
     0, 6, 0, 7, 0, 3, 0, 4, 0, 3 # tidytof
@@ -700,7 +718,7 @@ line_count <-
     2, 3, 3, 4, 6, 10, # tidySeurat
     2, 3, 3, 4, 6, 10, # tidySingleCellExperiment
     2, 3, 5, 6, 7, 10, # tidySpatialExperiment
-    3, 5, 4, 6, # tidySummarizedExperiment
+    3, 5, 4, 6, 2, 3, # tidySummarizedExperiment
     3, 7, 4, 6, 7, 7, # tidybulk
     4, 4, 7, 8, 7, 10, # plyranges
     2, 11, 4, 14, 3, 5, 3, 11, 3, 6 # tidytof
@@ -730,6 +748,8 @@ time_elapsed <-
     se_base_mean(),
     se_tidy_plot(),
     se_base_plot(),
+    se_tidy_split(),
+    se_base_split(),
     bulk_tidy_normalise(),
     bulk_base_normalise(),
     bulk_tidy_plot(),
@@ -752,7 +772,7 @@ time_elapsed <-
     cytometry_base_signature(),
     cytometry_tidy_plot(),
     cytometry_base_plot(),
-    times = 1
+    times = 10
   ) |>
   base::summary() |>
   pull(mean)
@@ -930,5 +950,8 @@ tidy_time_mean <-
 # Session info
 
 ```{r sessionInfo, echo = FALSE}
+
+# Benchmarking performed on a 2021 14-inch MacBook Pro, with an Apple M1 Max chip and 32 GB of memory 
+
 sessionInfo()
 ```
