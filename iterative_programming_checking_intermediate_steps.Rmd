@@ -1,0 +1,56 @@
+---
+title: "Simple example workflow"
+author:
+- name: William Hutchison
+  affiliation: Walter and Eliza Hall Institute of Medical Research
+  email: hutchison.w@wehi.edu.au
+package: 
+output:
+  BiocStyle::html_document
+abstract: |
+  A demonstration of a simple tidyomics workflow, taking advantage of the ability to write and run code continuously, line-by-line.
+vignette: |
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Workflow 
+
+Analyses are usually built up iteratively and require frequent checks and modifications. The tidy programming style is perfectly amenable to this workflow. To demonstrate this, we begin by loading the required packages and data:
+
+```{r}
+# Load libraries
+library(tidySingleCellExperiment)
+library(tidyomicsWorkshop) # Available at https://github.com/tidyomics/tidyomicsWorkshop
+
+# Load data
+sce_object <- tidyomicsWorkshop::sce_obj
+```
+
+We can then inspect our data using the tibble-abstraction provided by *tidySingleCellExperiment.** 
+```{r}
+sce_object
+```
+
+Before deciding to investigate the relationship between predicted phase and S-score:
+```{r}
+sce_object |>
+  group_by(Phase) |>
+  summarise(mean_s_score = mean(S.Score))
+```
+
+And finally we may wish to present our findings as a plot:
+```{r}
+sce_object |>
+  group_by(Phase) |>
+  summarise(mean_s_score = mean(S.Score)) |>
+  ggplot(aes(x = Phase, y = mean_s_score)) +
+  geom_point()
+```
+  
+For clarity these decisions are here presented as separate code blocks. But, in practice, code like this can easily be written and run continuously, line-by-line. 
+
+```{r}
+sessionInfo()
+```
