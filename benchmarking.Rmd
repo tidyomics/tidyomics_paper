@@ -37,6 +37,7 @@ library(tibble)
 library(dplyr)
 library(microbenchmark)
 library(cowplot)
+library(ggtext)
 
 # Load data
 seurat_object <- tidyomicsWorkshop::seurat_obj
@@ -261,25 +262,6 @@ spe_base_signature <-
 ```
 
 ## tidySummarizedExperiment 
-Split sample metadata column
-```{r}
-# tidyomics workflow
-se_tidy_split <-
-  function() {
-    se_object |>
-      separate(time, sep = " ", into = c("value", "unit"))
-  }
-
-# Standard workflow
-se_base_split <- 
-  function() {
-    times <- as.character(colData(se_object)$time)
-    times <- data.frame(do.call('rbind', strsplit(times, " ", fixed = TRUE)))
-    cbind(colData(se_object), times)
-  }
-
-```
-
 Sum feature counts per cell type
 ```{r}
 # tidyomics workflow
@@ -295,7 +277,7 @@ se_base_mean <- function() {
   colnames(se_object_cell_type) <- colData(se_object_cell_type)$Cell.type
   se_object_cell_type_counts <- assay(se_object_cell_type, "count")
   se_object_cell_type_counts <- t(rowsum(t(se_object_cell_type_counts), group = colnames(se_object_cell_type_counts)))
-  colSums(se_object_counts_cell_type)
+  colSums(se_object_cell_type_counts)
 } 
 ```
 
@@ -318,6 +300,24 @@ se_base_plot <- function() {
   plot(density(colData(se_object_condition_true)$CD2), col = "blue")
   lines(density(colData(se_object_condition_false)$CD2), col = "red")
 }
+```
+
+Split sample metadata column
+```{r}
+# tidyomics workflow
+se_tidy_split <-
+  function() {
+    se_object |>
+      separate(time, sep = " ", into = c("value", "unit"))
+  }
+
+# Standard workflow
+se_base_split <- 
+  function() {
+    times <- as.character(colData(se_object)$time)
+    times <- data.frame(do.call('rbind', strsplit(times, " ", fixed = TRUE)))
+    cbind(colData(se_object), times)
+  }
 ```
 
 ## tidybulk
@@ -684,13 +684,13 @@ package <-
 
 operation <- 
   c(
-    "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
-    "Aggregate cells by variable", "Plot feature counts by cell", "Subset cells by feature signature",
-    "Aggregate cells by variable", "Plot feature counts by region", "Subset cells by feature signature",
-    "Sum feature counts by cell type", "Plot feature counts by condition", "Split sample metadata column",
-    "Normalise feature", "Plot normalised feature density", "Find most variable features", 
-    "Aggregate overlaps", "Plot feature set distances", "Grouped disjoin ranges",
-    "Downsample cells", "Aggregate cells by variable", "Normalise features", "Subset cells by feature signature", "Plot PCA" 
+    "Aggregate", "Plot\nfeatures", "Subset\ncells",
+    "Aggregate", "Plot\nfeatures", "Subset\ncells",
+    "Aggregate ", "Plot\nfeatures", "Subset\ncells",
+    "Sum\nfeatures", "Plot\nfeatures", "Split\nmetadata",
+    "Normalise", "Plot\ndensity", "Variable\nfeatures", 
+    "Aggregate\noverlaps", "Plot\ndistances", "Disjoin\nranges",
+    "Downsample", "Aggregate", "Normalise", "Subset\ncells", "Plot PCA" 
   ) |>
   rep(each = 2)
 
@@ -772,7 +772,7 @@ time_elapsed <-
     cytometry_base_signature(),
     cytometry_tidy_plot(),
     cytometry_base_plot(),
-    times = 10
+    times = 50
   ) |>
   base::summary() |>
   pull(mean)
@@ -812,47 +812,47 @@ tidy_base_benchmark <-
 theme_multipanel <-
   theme_bw() +
   theme(
+    
+    # Lines
     panel.border = element_blank(),
     axis.line = element_line(linewidth = 0.1),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    legend.position = "bottom",
-    strip.background = element_blank(),
-    axis.title.y = element_text(margin = margin(
-      t = 0,
-      r = 0,
-      b = 0,
-      l = 0
-    ), size = 7),
-    axis.title.x = element_text(margin = margin(
-      t = 0,
-      r = 0,
-      b = 0,
-      l = 0
-    ), size = 7),
-    panel.spacing.x = unit(0.05, "lines"),
-    panel.spacing.y = unit(0.25, "lines"),
-    axis.text.x = element_text(size = 5, angle = 45, vjust = 1, hjust = 1),
-    axis.text.y = element_text(size = 5),
-    strip.text.x = element_text(size = 4.5, face = "bold"),
-    strip.text.y = element_text(size = 5),
+        
+    # Spacing
+    panel.spacing.x = unit(0.2, "lines"),
+    panel.spacing.y = unit(0.1, "lines"),
+    plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
+    
+    # Facets
+    strip.background.x = element_blank(),
+    strip.text.x = element_text(size = 5.5, face = "bold"),
+    strip.background.y = element_blank(),
+    strip.text.y = element_blank(),
     strip.clip = "off",
-
-    # legend
-    legend.key.size = unit(5, 'mm'),
-    legend.title = element_text(size = 5),
-    legend.text = element_text(size = 5),
     
-    # Title
-    plot.title = element_text(size = 7),
+    # X axis
+    axis.title.x = element_text(margin = margin(t = 0, r = 0, b = 0, l = 0), size = 5.5, face = "bold"),
     axis.line.x = element_line(size = 0.2),
-    axis.line.y = element_line(size = 0.2),
     axis.ticks.x = element_line(size = 0.2),
-    axis.ticks.y = element_line(size = 0.2),
+    axis.text.x = element_text(size = 5.5, angle = 45, vjust = 1, hjust = 1),
     
-    # Position
-    plot.margin = margin(l = 3)
+    # Y axis
+    axis.title.y = element_markdown(margin = margin(t = 0, r = 0, b = 0, l = 0), size = 5.5, angle = 45, vjust = 0.5, hjust = 0.8), #, hjust = 1),
+    axis.line.y = element_line(size = 0.2),
+    axis.ticks.y = element_line(size = 0.2),
+    axis.text.y = element_text(size = 5.5),
+    
+    # Legend
+    legend.position = "bottom",
+    legend.key.size = unit(5, 'mm'),
+    legend.title = element_text(size = 5.5),
+    legend.text = element_text(size = 5.5)
     )
+
+tidy_colour <- "#444444"
+standard_colour <- "#BA4242"
+facet_order <- c("tidySingleCellExperiment", "tidyseurat", "tidySummarizedExperiment", "tidybulk",  "tidySpatialExperiment", "plyranges", "tidytof")
 ```
 
 ```{r, warning = FALSE}
@@ -864,10 +864,11 @@ plot_variable <-
   ggplot(aes(x = operation, y = value, group = method, colour = method)) +
   geom_line() +
   geom_point(size = 1) +
-  facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
-  scale_y_continuous(limits = c(0, 8), breaks = seq(0, 8, 2)) + 
-  scale_colour_manual(values = c("#56B4E9", "#B14380")) +
-  labs(x = "Operation", y = NULL, colour = "Method") +
+  facet_grid(~ factor(package, levels = facet_order), scales = "free", space = "free") +
+  scale_y_continuous(limits = c(0, 8), breaks = seq(0, 8, 4)) + 
+  scale_colour_manual(values = c(standard_colour, tidy_colour)) +
+  coord_cartesian(clip = "off") +
+  labs(x = "Operations", y = "<b>Variables</b><br />(count)", colour = "Method") +
   theme_multipanel +
   theme(
     legend.position = "none", 
@@ -883,10 +884,11 @@ plot_line <-
   ggplot(aes(x = operation, y = value, group = method, colour = method)) +
   geom_line() +
   geom_point(size = 1) +
-  facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
+  facet_grid(~ factor(package, levels = facet_order), scales = "free", space = "free") +
   scale_y_continuous(limits = c(0, 15), breaks = seq(0, 15, 5)) + 
-  scale_colour_manual(values = c("#56B4E9", "#B14380")) +
-  labs(x = "Operation", y = NULL, colour = "Method") +
+  scale_colour_manual(values = c(standard_colour, tidy_colour)) +
+  coord_cartesian(clip = "off") +
+  labs(x = "Operations", y = "<b>Lines</b><br />(count)", colour = "Method") +
   theme_multipanel +
   theme(
     legend.position = "none", 
@@ -894,7 +896,7 @@ plot_line <-
     axis.line.x = element_blank(),
     axis.title.x = element_blank(), 
     axis.text.x = element_blank(), 
-    axis.ticks.x = element_blank()
+    axis.ticks.x = element_blank(),
     )
 
 plot_time <-
@@ -903,14 +905,16 @@ plot_time <-
   ggplot(aes(x = operation, y = value, group = method, colour = method)) +
   geom_line() +
   geom_point(size = 1) +
-  facet_grid(rows = vars(metric), cols = vars(package), scale = "free") +
-  scale_y_continuous(limits = c(0, 2000), breaks = seq(0, 2000, 1000)) + 
-  scale_colour_manual(values = c("#56B4E9", "#B14380")) +
-  labs(x = "Operation", y = NULL, colour = "Method") +
+  facet_grid(~ factor(package, levels = facet_order), scales = "free", space = "free") +
+  scale_y_continuous(limits = c(0, 1800), breaks = seq(0, 1800, 600)) + 
+  scale_colour_manual(values = c(standard_colour, tidy_colour)) +
+  coord_cartesian(clip = "off") +
+  labs(x = "Operations", y = "<b>Time</b><br />(millisec.)", colour = "Method") +
   theme_multipanel +
-  theme(strip.text.x = element_blank())
+  theme(legend.position = "none", strip.text.x = element_blank())
 
-plot_grid(plot_variable, plot_line, plot_time, ncol = 1, align = "v", rel_heights = c(1, 1, 1.6))
+plot_grid(plot_variable, plot_line, plot_time, ncol = 1, align = "v", rel_heights = c(1, 1, 1.8))
+# ggsave("benchmark_plot.pdf", width = 18, height = 5.2, units = "cm")
 ```
 
 ## Calculate summary statistics 
@@ -950,8 +954,6 @@ tidy_time_mean <-
 # Session info
 
 ```{r sessionInfo, echo = FALSE}
-
-# Benchmarking performed on a 2021 14-inch MacBook Pro, with an Apple M1 Max chip and 32 GB of memory 
-
 sessionInfo()
 ```
+
