@@ -38,6 +38,7 @@ library(dplyr)
 library(microbenchmark)
 library(cowplot)
 library(ggtext)
+library(tidyomicsWorkshop) # Available at https://github.com/tidyomics/tidyomicsWorkshop
 
 # Load data
 seurat_object <- tidyomicsWorkshop::seurat_obj
