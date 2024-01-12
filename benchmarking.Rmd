@@ -851,8 +851,8 @@ theme_multipanel <-
     legend.text = element_text(size = 5.5)
     )
 
-tidy_colour <- "#444444"
-standard_colour <- "#BA4242"
+tidy_colour <- "#BA4242"
+standard_colour <- "#444444"
 facet_order <- c("tidySingleCellExperiment", "tidyseurat", "tidySummarizedExperiment", "tidybulk",  "tidySpatialExperiment", "plyranges", "tidytof")
 ```
 
