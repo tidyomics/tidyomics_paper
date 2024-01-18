@@ -3,7 +3,7 @@
 #####################################
 
 library(SummarizedExperiment)
-se <- readRDS("pseudobulk_for_michael_cd4_naive.rds")
+se <- readRDS("data/pseudobulk_cd4_naive.rds")
 
 library(tidySummarizedExperiment)
 library(tidybulk)
@@ -51,7 +51,7 @@ g <- keepStandardChromosomes(g, pruning.mode = "coarse")
 
 library(readr)
 diseases <- c("MS","RA","SLE")
-csvs <- lapply(diseases, \(d) read_csv(paste0(d,"_hg19_gwas.csv")))
+csvs <- lapply(diseases, \(d) read_csv(paste0("data/", d,"_hg19_gwas.csv")))
 names(csvs) <- diseases
 
 library(GenomeInfoDb)
