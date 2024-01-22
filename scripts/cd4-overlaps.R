@@ -111,7 +111,7 @@ gwas <- gwas |>
 ####################################
 
 
-load("intermediate.rda")
+# load("intermediate.rda")
 
 library(plyranges)
 library(dplyr)
