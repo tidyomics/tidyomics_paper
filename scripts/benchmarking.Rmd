@@ -38,6 +38,7 @@ library(dplyr)
 library(microbenchmark)
 library(cowplot)
 library(ggtext)
+library(readr)
 library(tidyomicsWorkshop) # Available at https://github.com/tidyomics/tidyomicsWorkshop
 
 # Load data
@@ -104,7 +105,8 @@ seurat_tidy_signature <-
       join_features(features = c("CD3D", "TRDC", "TRGC1", "TRGC2", "CD8A", "CD8B"), shape = "wide") |>
       mutate(signature_score =
                scales::rescale(CD3D + TRDC + TRGC1 + TRGC2, to = c(0, 1)) -
-               scales::rescale(CD8A + CD8B, to = c(0, 1))) |>
+               scales::rescale(CD8A + CD8B, to = c(0, 1))
+      ) |>
       dplyr::filter(signature_score > 0.7)
   }
 
@@ -172,7 +174,8 @@ sce_tidy_signature <-
       join_features(features = c("CD3D", "TRDC", "TRGC1", "TRGC2", "CD8A", "CD8B"), shape = "wide") |>
       mutate(signature_score =
                scales::rescale(CD3D + TRDC + TRGC1 + TRGC2, to = c(0, 1)) -
-               scales::rescale(CD8A + CD8B, to = c(0, 1))) |>
+               scales::rescale(CD8A + CD8B, to = c(0, 1))
+      ) |>
       dplyr::filter(signature_score > 0.7)
   }
 
@@ -240,10 +243,12 @@ spe_tidy_signature <-
   function() {
     spe_object |>
       join_features(features = c("ENSMUSG00000016918", "ENSMUSG00000051951", "ENSMUSG00000057715",
-                                 "ENSMUSG00000048960"), shape = "wide") |>
+                                 "ENSMUSG00000048960"), shape = "wide"
+      ) |>
       mutate(signature_score = 
         scales::rescale(ENSMUSG00000016918 + ENSMUSG00000051951, to = c(0, 1)) - 
-        scales::rescale(ENSMUSG00000057715 + ENSMUSG00000048960, to = c(0, 1))) |>
+        scales::rescale(ENSMUSG00000057715 + ENSMUSG00000048960, to = c(0, 1))
+      ) |>
       dplyr::filter(signature_score > 0.7) 
   }
 
@@ -277,7 +282,8 @@ se_base_mean <- function() {
   se_object_cell_type <- se_object
   colnames(se_object_cell_type) <- colData(se_object_cell_type)$Cell.type
   se_object_cell_type_counts <- assay(se_object_cell_type, "count")
-  se_object_cell_type_counts <- t(rowsum(t(se_object_cell_type_counts), group = colnames(se_object_cell_type_counts)))
+  se_object_cell_type_counts <- t(rowsum(t(se_object_cell_type_counts), 
+                                         group = colnames(se_object_cell_type_counts)))
   colSums(se_object_cell_type_counts)
 } 
 ```
@@ -501,7 +507,8 @@ genome_tidy_overlap <- function() {
   x |>
     join_overlap_inner(range(x) |>
                          tile_ranges(width = 1000) %>%
-                         mutate(tile = seq_along(.))) |>
+                         mutate(tile = seq_along(.))
+    ) |>
     plyranges::group_by(tile) |>
     plyranges::disjoin_ranges(total = plyranges::n()) |>
     plyranges::filter(total > 1)
@@ -716,12 +723,12 @@ variable_count <-
 
 line_count <- 
   c(
-    2, 3, 3, 4, 6, 10, # tidySeurat
-    2, 3, 3, 4, 6, 10, # tidySingleCellExperiment
-    2, 3, 5, 6, 7, 10, # tidySpatialExperiment
-    3, 5, 4, 6, 2, 3, # tidySummarizedExperiment
+    2, 3, 3, 4, 7, 10, # tidySeurat
+    2, 3, 3, 4, 7, 10, # tidySingleCellExperiment
+    2, 3, 5, 6, 9, 10, # tidySpatialExperiment
+    3, 6, 4, 6, 2, 3, # tidySummarizedExperiment
     3, 7, 4, 6, 7, 7, # tidybulk
-    4, 4, 7, 8, 7, 10, # plyranges
+    4, 4, 7, 8, 8, 10, # plyranges
     2, 11, 4, 14, 3, 5, 3, 11, 3, 6 # tidytof
   )
 
@@ -915,7 +922,9 @@ plot_time <-
   theme(legend.position = "none", strip.text.x = element_blank())
 
 plot_grid(plot_variable, plot_line, plot_time, ncol = 1, align = "v", rel_heights = c(1, 1, 1.8))
-# ggsave("benchmark_plot.pdf", width = 18, height = 5.2, units = "cm")
+ggsave("benchmark_plot.pdf", width = 18, height = 5.2, units = "cm")
+write_csv(tidy_base_benchmark, "benchmark_source_data.csv")
+
 ```
 
 ## Calculate summary statistics 
