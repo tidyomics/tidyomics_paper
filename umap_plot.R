@@ -56,6 +56,7 @@ aggregate_no_filter = function(se_df){
 			}
 		))
 }
+
 pseudobulk =
 	pseudobulk  |>
 	group_split(cell_type_harmonised) |>

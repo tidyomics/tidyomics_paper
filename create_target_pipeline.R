@@ -27,7 +27,6 @@ library(tidyverse)
 library(targets)
 library(glue)
 library(tictoc)
-source("https://gist.githubusercontent.com/stemangiola/fc67b08101df7d550683a5100106561c/raw/a0853a1a4e8a46baf33bad6268b09001d49faf51/ggplot_theme_multipanel")
 library(patchwork)
 # # Get input from other workflow
 result_directory = "/stornext/Bioinf/data/bioinf-data/Papenfuss_lab_projects/people/mangiola.s/PostDoc/immuneHealthyBodyMap/pseudobulk_0.2.3.5_non_immune"
@@ -959,6 +958,7 @@ de =
 de |> saveRDS("de_blood.rds")
 
 # Sourcing a script for cell type color mapping
+source("https://gist.githubusercontent.com/stemangiola/fc67b08101df7d550683a5100106561c/raw/a0853a1a4e8a46baf33bad6268b09001d49faf51/ggplot_theme_multipanel")
 source("https://gist.githubusercontent.com/stemangiola/cfa08c45c28fdf223d4996a6c1256a39/raw/f0b6bf9f59847c8b9f0a638262a6b8dd697affb7/color_cell_types.R")
 # Getting colors for cell types
 cell_type_color =
@@ -1031,6 +1031,7 @@ gene_chr = read_csv("~/PostDoc/immuneHealthyBodyMap/symbol_chr.csv")
 # Calculating the proportion of interaction-only significant genes
 proportion_of_interaction_only =
   de |>
+  filter(cell_type_harmonised != "thymocyte") |>
   filter(!is.na(P_sex_adjusted)) |>  # Filtering out NA adjusted p-values
   filter(!.feature %in% gene_chr$ID) |>  # Excluding genes listed in gene_chr
   add_count(cell_type_harmonised, name = "gene_number") |>  # Counting genes per cell type
@@ -1040,6 +1041,7 @@ proportion_of_interaction_only =
     cell_type_harmonised, gene_number,
     de_only_in_sex, de_only_in_interaction
   ) |>  # Counting differential expressions
+  complete(nesting(cell_type_harmonised, gene_number), de_only_in_sex, de_only_in_interaction, fill = list(n=0)) |>
   filter(de_only_in_sex + de_only_in_interaction == 1) |>  # Filtering for exclusive categories
   mutate(proportion_of_significant = n/gene_number) |>  # Calculating proportion of significant genes
   mutate(label = if_else(de_only_in_sex, "de_only_in_sex", "de_only_in_interaction")) |>  # Labeling categories
@@ -1066,7 +1068,12 @@ de |>
   ) |>
   filter(de_only_in_sex + de_only_in_interaction == 1) |>
   mutate(proportion_of_significant = n/gene_number) |>
-  mutate(label = if_else(de_only_in_sex, "de_only_in_sex", "de_only_in_interaction")) |> select(cell_type_harmonised, proportion_of_significant, label) |> pivot_wider(names_from = label , values_from = proportion_of_significant) |> mutate(contribution = de_only_in_interaction / (de_only_in_sex + de_only_in_interaction) ) |> pull(contribution) |> mean(na.rm=TRUE)
+  mutate(label = if_else(de_only_in_sex, "de_only_in_sex", "de_only_in_interaction")) |>
+  select(cell_type_harmonised, proportion_of_significant, label) |>
+  pivot_wider(names_from = label , values_from = proportion_of_significant) |>
+  mutate(contribution = de_only_in_interaction / (de_only_in_sex + de_only_in_interaction) ) |>
+  pull(contribution) |>
+  mean(na.rm=TRUE)
 
 p = ((
   plot_spacer() | plot_sex_cell_type_most_de
@@ -1083,3 +1090,4 @@ ggsave(
   height = 55 *2 ,
   limitsize = FALSE
 )
+t
