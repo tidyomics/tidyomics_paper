@@ -1,0 +1,367 @@
+package,method,operation,metric,value
+tidyseurat,tidyomics,Aggregate,"Line count
+",2
+tidyseurat,tidyomics,Aggregate,"Variable count
+",0
+tidyseurat,tidyomics,Aggregate,"Time elapsed
+(ms)",643.57256146
+tidyseurat,standard,Aggregate,"Line count
+",3
+tidyseurat,standard,Aggregate,"Variable count
+",2
+tidyseurat,standard,Aggregate,"Time elapsed
+(ms)",371.3490857
+tidyseurat,tidyomics,"Plot
+features","Line count
+",3
+tidyseurat,tidyomics,"Plot
+features","Variable count
+",0
+tidyseurat,tidyomics,"Plot
+features","Time elapsed
+(ms)",15.60699234
+tidyseurat,standard,"Plot
+features","Line count
+",4
+tidyseurat,standard,"Plot
+features","Variable count
+",3
+tidyseurat,standard,"Plot
+features","Time elapsed
+(ms)",394.28507732
+tidyseurat,tidyomics,"Subset
+cells","Line count
+",7
+tidyseurat,tidyomics,"Subset
+cells","Variable count
+",0
+tidyseurat,tidyomics,"Subset
+cells","Time elapsed
+(ms)",354.14464576
+tidyseurat,standard,"Subset
+cells","Line count
+",10
+tidyseurat,standard,"Subset
+cells","Variable count
+",2
+tidyseurat,standard,"Subset
+cells","Time elapsed
+(ms)",1716.76649986
+tidySingleCellExperiment,tidyomics,Aggregate,"Line count
+",2
+tidySingleCellExperiment,tidyomics,Aggregate,"Variable count
+",0
+tidySingleCellExperiment,tidyomics,Aggregate,"Time elapsed
+(ms)",958.66038486
+tidySingleCellExperiment,standard,Aggregate,"Line count
+",3
+tidySingleCellExperiment,standard,Aggregate,"Variable count
+",2
+tidySingleCellExperiment,standard,Aggregate,"Time elapsed
+(ms)",64.18338974
+tidySingleCellExperiment,tidyomics,"Plot
+features","Line count
+",3
+tidySingleCellExperiment,tidyomics,"Plot
+features","Variable count
+",0
+tidySingleCellExperiment,tidyomics,"Plot
+features","Time elapsed
+(ms)",58.014229
+tidySingleCellExperiment,standard,"Plot
+features","Line count
+",4
+tidySingleCellExperiment,standard,"Plot
+features","Variable count
+",3
+tidySingleCellExperiment,standard,"Plot
+features","Time elapsed
+(ms)",73.8491165
+tidySingleCellExperiment,tidyomics,"Subset
+cells","Line count
+",7
+tidySingleCellExperiment,tidyomics,"Subset
+cells","Variable count
+",0
+tidySingleCellExperiment,tidyomics,"Subset
+cells","Time elapsed
+(ms)",319.84234574
+tidySingleCellExperiment,standard,"Subset
+cells","Line count
+",10
+tidySingleCellExperiment,standard,"Subset
+cells","Variable count
+",2
+tidySingleCellExperiment,standard,"Subset
+cells","Time elapsed
+(ms)",63.0031849
+tidySpatialExperiment,tidyomics,Aggregate ,"Line count
+",2
+tidySpatialExperiment,tidyomics,Aggregate ,"Variable count
+",0
+tidySpatialExperiment,tidyomics,Aggregate ,"Time elapsed
+(ms)",155.8650307
+tidySpatialExperiment,standard,Aggregate ,"Line count
+",3
+tidySpatialExperiment,standard,Aggregate ,"Variable count
+",2
+tidySpatialExperiment,standard,Aggregate ,"Time elapsed
+(ms)",45.77866402
+tidySpatialExperiment,tidyomics,"Plot
+features","Line count
+",5
+tidySpatialExperiment,tidyomics,"Plot
+features","Variable count
+",0
+tidySpatialExperiment,tidyomics,"Plot
+features","Time elapsed
+(ms)",78.5729857
+tidySpatialExperiment,standard,"Plot
+features","Line count
+",6
+tidySpatialExperiment,standard,"Plot
+features","Variable count
+",3
+tidySpatialExperiment,standard,"Plot
+features","Time elapsed
+(ms)",85.79859316
+tidySpatialExperiment,tidyomics,"Subset
+cells","Line count
+",9
+tidySpatialExperiment,tidyomics,"Subset
+cells","Variable count
+",0
+tidySpatialExperiment,tidyomics,"Subset
+cells","Time elapsed
+(ms)",131.2787449
+tidySpatialExperiment,standard,"Subset
+cells","Line count
+",10
+tidySpatialExperiment,standard,"Subset
+cells","Variable count
+",2
+tidySpatialExperiment,standard,"Subset
+cells","Time elapsed
+(ms)",51.15857814
+tidySummarizedExperiment,tidyomics,"Sum
+features","Line count
+",3
+tidySummarizedExperiment,tidyomics,"Sum
+features","Variable count
+",0
+tidySummarizedExperiment,tidyomics,"Sum
+features","Time elapsed
+(ms)",60.21412914
+tidySummarizedExperiment,standard,"Sum
+features","Line count
+",6
+tidySummarizedExperiment,standard,"Sum
+features","Variable count
+",2
+tidySummarizedExperiment,standard,"Sum
+features","Time elapsed
+(ms)",3.78370644
+tidySummarizedExperiment,tidyomics,"Plot
+features","Line count
+",4
+tidySummarizedExperiment,tidyomics,"Plot
+features","Variable count
+",0
+tidySummarizedExperiment,tidyomics,"Plot
+features","Time elapsed
+(ms)",169.70769238
+tidySummarizedExperiment,standard,"Plot
+features","Line count
+",6
+tidySummarizedExperiment,standard,"Plot
+features","Variable count
+",3
+tidySummarizedExperiment,standard,"Plot
+features","Time elapsed
+(ms)",23.31957412
+tidySummarizedExperiment,tidyomics,"Split
+metadata","Line count
+",2
+tidySummarizedExperiment,tidyomics,"Split
+metadata","Variable count
+",0
+tidySummarizedExperiment,tidyomics,"Split
+metadata","Time elapsed
+(ms)",116.70468326
+tidySummarizedExperiment,standard,"Split
+metadata","Line count
+",3
+tidySummarizedExperiment,standard,"Split
+metadata","Variable count
+",1
+tidySummarizedExperiment,standard,"Split
+metadata","Time elapsed
+(ms)",3.17535656
+tidybulk,tidyomics,Normalise,"Line count
+",3
+tidybulk,tidyomics,Normalise,"Variable count
+",0
+tidybulk,tidyomics,Normalise,"Time elapsed
+(ms)",40.90202574
+tidybulk,standard,Normalise,"Line count
+",7
+tidybulk,standard,Normalise,"Variable count
+",3
+tidybulk,standard,Normalise,"Time elapsed
+(ms)",9.08031898
+tidybulk,tidyomics,"Plot
+density","Line count
+",4
+tidybulk,tidyomics,"Plot
+density","Variable count
+",0
+tidybulk,tidyomics,"Plot
+density","Time elapsed
+(ms)",52.60764898
+tidybulk,standard,"Plot
+density","Line count
+",6
+tidybulk,standard,"Plot
+density","Variable count
+",1
+tidybulk,standard,"Plot
+density","Time elapsed
+(ms)",11.99626906
+tidybulk,tidyomics,"Variable
+features","Line count
+",7
+tidybulk,tidyomics,"Variable
+features","Variable count
+",0
+tidybulk,tidyomics,"Variable
+features","Time elapsed
+(ms)",614.58501652
+tidybulk,standard,"Variable
+features","Line count
+",7
+tidybulk,standard,"Variable
+features","Variable count
+",5
+tidybulk,standard,"Variable
+features","Time elapsed
+(ms)",38.53677236
+plyranges,tidyomics,"Aggregate
+overlaps","Line count
+",4
+plyranges,tidyomics,"Aggregate
+overlaps","Variable count
+",0
+plyranges,tidyomics,"Aggregate
+overlaps","Time elapsed
+(ms)",75.75919474
+plyranges,standard,"Aggregate
+overlaps","Line count
+",4
+plyranges,standard,"Aggregate
+overlaps","Variable count
+",3
+plyranges,standard,"Aggregate
+overlaps","Time elapsed
+(ms)",25.07807238
+plyranges,tidyomics,"Plot
+distances","Line count
+",7
+plyranges,tidyomics,"Plot
+distances","Variable count
+",0
+plyranges,tidyomics,"Plot
+distances","Time elapsed
+(ms)",118.66178564
+plyranges,standard,"Plot
+distances","Line count
+",8
+plyranges,standard,"Plot
+distances","Variable count
+",3
+plyranges,standard,"Plot
+distances","Time elapsed
+(ms)",53.4332857
+plyranges,tidyomics,"Disjoin
+ranges","Line count
+",8
+plyranges,tidyomics,"Disjoin
+ranges","Variable count
+",0
+plyranges,tidyomics,"Disjoin
+ranges","Time elapsed
+(ms)",321.00436146
+plyranges,standard,"Disjoin
+ranges","Line count
+",10
+plyranges,standard,"Disjoin
+ranges","Variable count
+",6
+plyranges,standard,"Disjoin
+ranges","Time elapsed
+(ms)",729.74789726
+tidytof,tidyomics,Downsample,"Line count
+",2
+tidytof,tidyomics,Downsample,"Variable count
+",0
+tidytof,tidyomics,Downsample,"Time elapsed
+(ms)",12.68110322
+tidytof,standard,Downsample,"Line count
+",11
+tidytof,standard,Downsample,"Variable count
+",6
+tidytof,standard,Downsample,"Time elapsed
+(ms)",227.9635465
+tidytof,tidyomics,Aggregate,"Line count
+",4
+tidytof,tidyomics,Aggregate,"Variable count
+",0
+tidytof,tidyomics,Aggregate,"Time elapsed
+(ms)",70.59170062
+tidytof,standard,Aggregate,"Line count
+",14
+tidytof,standard,Aggregate,"Variable count
+",7
+tidytof,standard,Aggregate,"Time elapsed
+(ms)",320.32640898
+tidytof,tidyomics,Normalise,"Line count
+",3
+tidytof,tidyomics,Normalise,"Variable count
+",0
+tidytof,tidyomics,Normalise,"Time elapsed
+(ms)",111.44329068
+tidytof,standard,Normalise,"Line count
+",5
+tidytof,standard,Normalise,"Variable count
+",3
+tidytof,standard,Normalise,"Time elapsed
+(ms)",507.66762148
+tidytof,tidyomics,"Subset
+cells","Line count
+",3
+tidytof,tidyomics,"Subset
+cells","Variable count
+",0
+tidytof,tidyomics,"Subset
+cells","Time elapsed
+(ms)",3.36399732
+tidytof,standard,"Subset
+cells","Line count
+",11
+tidytof,standard,"Subset
+cells","Variable count
+",4
+tidytof,standard,"Subset
+cells","Time elapsed
+(ms)",38.91045148
+tidytof,tidyomics,Plot PCA,"Line count
+",3
+tidytof,tidyomics,Plot PCA,"Variable count
+",0
+tidytof,tidyomics,Plot PCA,"Time elapsed
+(ms)",468.84720574
+tidytof,standard,Plot PCA,"Line count
+",6
+tidytof,standard,Plot PCA,"Variable count
+",3
+tidytof,standard,Plot PCA,"Time elapsed
+(ms)",552.42121976
